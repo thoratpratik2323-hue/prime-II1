@@ -1,0 +1,1050 @@
+<!-- NEXUS OS dashboard.html | macOS Yosemite Glass Style -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🧬 IP PRIME — macOS Yosemite Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<style>
+/* ═══════════════════════════════════════════════
+   CSS DESIGN TOKENS — macOS Yosemite Glass
+═══════════════════════════════════════════════ */
+:root {
+  --cyan:        #00f5ff;
+  --cyan-dim:    rgba(0,245,255,0.15);
+  --cyan-glow:   rgba(0,245,255,0.5);
+  --purple:      #a855f7;
+  --purple-dim:  rgba(168,85,247,0.15);
+  --purple-glow: rgba(168,85,247,0.5);
+  --amber:       #f59e0b;
+  --amber-dim:   rgba(245,158,11,0.15);
+  --green:       #10b981;
+  --green-dim:   rgba(16,185,129,0.15);
+  --red:         #f43f5e;
+  --red-dim:     rgba(244,63,94,0.15);
+  
+  --menu-bg:     rgba(255, 255, 255, 0.15);
+  --menu-border: rgba(255, 255, 255, 0.2);
+  --menu-text:   #ffffff;
+  
+  --glass-bg:     rgba(255, 255, 255, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.25);
+  --glass-shadow: rgba(0, 0, 0, 0.3);
+  
+  --title-bg:     rgba(255, 255, 255, 0.22);
+  --body-bg:      rgba(255, 255, 255, 0.08);
+  
+  --text-hi:     #ffffff;
+  --text-mid:    #e0e7ff;
+  --text-lo:     #94a3b8;
+  --radius:      10px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+
+body {
+  background: url('https://images.unsplash.com/photo-1516687401797-25297ff1462c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wzMjM4NDZ8MHwxfHJhbmRvbXx8fHx8fHx8fDE2OTA4OTI4OTl8&ixlib=rb-4.0.3&q=80&w=1600') 50% no-repeat fixed;
+  background-size: cover;
+  color: var(--text-hi);
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════
+   2D NEURAL CANVAS LAYER (Placed behind windows)
+═══════════════════════════════════════════════ */
+#neuralCanvas {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Blur overlay behind windows to simulate double-blur */
+.desktop-tint {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════
+   TOP MENU BAR (macOS Yosemite Style)
+═══════════════════════════════════════════════ */
+.menu-bar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 24px;
+  z-index: 9999;
+  background: var(--menu-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--menu-border);
+  box-shadow: 0 1px 8px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--menu-text);
+}
+
+.menu-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.menu-logo {
+  font-size: 14px;
+  cursor: default;
+}
+.menu-item {
+  cursor: default;
+  transition: opacity 0.15s;
+}
+.menu-item:hover { opacity: 0.7; }
+.menu-item.bold { font-weight: 700; }
+
+.menu-spacer { flex: 1; }
+
+.menu-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: 'Outfit', sans-serif;
+}
+.menu-metric {
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.menu-metric span { color: var(--cyan); font-weight: 700; }
+
+.menu-clock {
+  font-weight: 600;
+}
+
+/* ═══════════════════════════════════════════════
+   DRAGGABLE WINDOWS (macOS Yosemite Glass)
+═══════════════════════════════════════════════ */
+article.draggable-window {
+  position: absolute;
+  background: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 100;
+  transition: opacity 0.25s, transform 0.25s;
+}
+
+article.draggable-window::before {
+  content: '';
+  position: absolute;
+  top: -20px; 
+  left: -20px; 
+  right: -20px; 
+  bottom: -20px;
+  background: inherit;
+  filter: blur(10px) saturate(2);
+  z-index: -1;
+}
+
+article.draggable-window.dragging::before {
+  filter: blur(10px) sepia(1) hue-rotate(200deg);
+}
+
+article.draggable-window.minimized {
+  opacity: 0;
+  transform: scale(0.8) translateY(100px);
+  pointer-events: none;
+}
+
+/* Window Title Bar */
+.window-titlebar {
+  height: 32px;
+  background: rgba(235, 235, 235, 0.85);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  position: relative;
+  cursor: move;
+  flex-shrink: 0;
+}
+
+article.draggable-window.dragging .window-titlebar {
+  background: rgba(215, 225, 255, 0.85);
+}
+
+/* Yosemite Traffic Lights */
+.traffic-lights {
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+.light-btn {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  position: relative;
+}
+.light-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.15);
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.traffic-lights:hover .light-btn::after { opacity: 1; }
+.light-close { background: #ff5f56; border: 1px solid #e0443e; }
+.light-min   { background: #ffbd2e; border: 1px solid #dfa224; }
+.light-max   { background: #27c93f; border: 1px solid #1a9c2b; }
+
+.window-title {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #222222;
+  pointer-events: none;
+  letter-spacing: 0.5px;
+}
+
+
+/* Window Content Body */
+.window-body {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.65);
+  color: #1e293b;
+  padding: 14px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ═══════════════════════════════════════════════
+   MODULE CONTENT DESIGNS
+═══════════════════════════════════════════════ */
+
+/* ── MODULE: NEURAL CORE & SYSTEM HEALTH ── */
+.neural-core-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.core-box {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.core-box-lbl { font-size: 9px; color: #475569; text-transform: uppercase; letter-spacing: 1px; }
+.core-box-val { font-size: 16px; font-weight: 700; color: #0369a1; margin-top: 2px; }
+
+.future-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.future-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #334155;
+}
+.future-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #0284c7;
+  box-shadow: 0 0 5px rgba(2, 132, 199, 0.5);
+}
+
+/* ── MODULE: MIND GRAPH ── */
+#graphContainer { width: 100%; height: 100%; min-height: 250px; }
+
+/* ── MODULE: TERMINAL ── */
+.terminal-console {
+  flex: 1;
+  background: rgba(0,0,0,0.3);
+  border-radius: 6px;
+  border: 1px solid var(--glass-border);
+  padding: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-y: auto;
+}
+.term-line { display: flex; gap: 8px; margin-bottom: 2px; }
+.term-sys  { color: var(--amber); }
+.term-prompt { color: var(--green); }
+.term-cmd  { color: var(--cyan); }
+.term-out  { color: var(--text-mid); padding-left: 12px; }
+.term-err  { color: var(--red); padding-left: 12px; }
+.term-cursor {
+  display: inline-block; width: 6px; height: 12px;
+  background: var(--cyan);
+  animation: term-blink 1s step-end infinite;
+  vertical-align: text-bottom;
+}
+@keyframes term-blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* ── MODULE: SWARM DECK ── */
+.swarm-container { display: flex; flex-direction: column; gap: 8px; }
+.swarm-agent-card {
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #1e293b;
+}
+.agent-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 4px; color: #0f172a; }
+.agent-status { font-size: 9px; padding: 1px 6px; border-radius: 3px; font-weight: 700; }
+.agent-status.running { background: rgba(2, 132, 199, 0.15); color: #0284c7; }
+.agent-status.idle { background: rgba(0, 0, 0, 0.08); color: #475569; }
+.agent-progress-wrap { height: 4px; background: rgba(0, 0, 0, 0.08); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+.agent-progress-bar { height: 100%; background: linear-gradient(90deg, #0284c7, var(--purple)); width: 0%; transition: width 0.4s; }
+
+/* ── MODULE: CONTROL CENTER ── */
+.cfg-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.cfg-row:last-child { border-bottom: none; }
+.cfg-lbl { font-size: 12px; color: #334155; }
+.cfg-val {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 2px 8px; border-radius: 4px; color: #0369a1;
+  cursor: pointer;
+}
+.cfg-toggle {
+  width: 34px; height: 18px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 9px;
+  position: relative; cursor: pointer;
+  transition: background 0.2s;
+}
+.cfg-toggle.on { background: var(--green); }
+.cfg-toggle::after {
+  content: ''; position: absolute;
+  top: 2px; left: 2px; width: 14px; height: 14px;
+  background: white; border-radius: 50%;
+  transition: transform 0.2s;
+}
+.cfg-toggle.on::after { transform: translateX(16px); }
+
+/* ── MODULE: FILES ── */
+.drop-zone {
+  border: 2px dashed rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.02);
+  transition: all 0.2s;
+}
+.drop-zone:hover { border-color: #0284c7; background: rgba(2, 132, 199, 0.03); }
+.drop-zone-lbl { font-size: 12px; color: #334155; margin-bottom: 4px; }
+.drop-zone-sub { font-size: 9px; color: #64748b; }
+.file-list-view {
+  margin-top: 10px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.file-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px; background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: #1e293b;
+}
+
+/* ═══════════════════════════════════════════════
+   DOCK (macOS Yosemite Style)
+═══════════════════════════════════════════════ */
+.dock-container {
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--menu-border);
+  border-radius: 16px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+
+/* Yosemite perspective reflection shelf effect */
+.dock-container::before {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 4%; right: 4%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+}
+
+.dock-icon {
+  width: 48px; height: 48px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  position: relative;
+}
+.dock-icon:hover {
+  transform: scale(1.2) translateY(-10px);
+  background: rgba(255,255,255,0.22);
+}
+
+/* Yosemite Active indicator dot */
+.dock-icon::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 4px #ffffff;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.dock-icon.active::after { opacity: 1; }
+
+.dock-tooltip {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%) translateY(5px);
+  background: rgba(0, 0, 0, 0.75);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.15s ease;
+}
+.dock-icon:hover .dock-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- 2D Canvas for Connecting Neural Node Background -->
+<canvas id="neuralCanvas"></canvas>
+<div class="desktop-tint"></div>
+
+<!-- macOS style top Menu Bar -->
+<header class="menu-bar">
+  <div class="menu-left">
+    <span class="menu-logo"></span>
+    <span class="menu-item bold">IP Prime OS</span>
+    <span class="menu-item">File</span>
+    <span class="menu-item">Edit</span>
+    <span class="menu-item">View</span>
+    <span class="menu-item">Window</span>
+    <span class="menu-item">Help</span>
+  </div>
+  <div class="menu-spacer"></div>
+  <div class="menu-right">
+    <div class="menu-metric">CPU: <span id="menuCpu">0%</span></div>
+    <div class="menu-metric">RAM: <span id="menuRam">0%</span></div>
+    <div class="menu-clock" id="menuClock">LOADING...</div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════
+   DRAGGABLE WINDOWS (macOS Yosemite Style)
+═══════════════════════════════════════════════ */
+
+<!-- WINDOW: NEURAL CORE -->
+<article class="draggable-window" id="win-core" style="width: 320px; height: 350px; left: 80px; top: 100px;">
+  <div class="window-titlebar">
+    <div class="traffic-lights">
+      <button class="light-btn light-close" onclick="closeWindow('core')"></button>
+      <button class="light-btn light-min" onclick="closeWindow('core')"></button>
+      <button class="light-btn light-max" onclick="maximizeWindow('core')"></button>
+    </div>
+    <div class="window-title">🧬 Neural Core</div>
+  </div>
+  <div class="window-body">
+    <div class="neural-core-grid">
+      <div class="core-box">
+        <span class="core-box-lbl">Nodes</span>
+        <span class="core-box-val" id="coreNodes">2,854</span>
+      </div>
+      <div class="core-box">
+        <span class="core-box-lbl">Session Spend</span>
+        <span class="core-box-val" style="color:var(--amber)">$<span id="coreCost">0.0000</span></span>
+      </div>
+      <div class="core-box">
+        <span class="core-box-lbl">Ollama Model</span>
+        <span class="core-box-val" style="font-size:11px;color:var(--purple)">llama3.1:8b</span>
+      </div>
+      <div class="core-box">
+        <span class="core-box-lbl">Uptime</span>
+        <span class="core-box-val" style="color:var(--green)">99.9%</span>
+      </div>
+    </div>
+    
+    <div style="font-size: 10px; font-weight: 700; color: var(--text-lo); margin-top: 6px; letter-spacing: 0.5px;">DESIRED FUTURE CORE CAPABILITIES</div>
+    <div class="future-list">
+      <div class="future-item"><div class="future-dot"></div>Deeply integrated real-time multimodal perception</div>
+      <div class="future-item"><div class="future-dot" style="background:var(--purple);box-shadow:0 0 5px var(--purple);"></div>Autonomous, self-healing decision-making</div>
+      <div class="future-item"><div class="future-dot" style="background:var(--green);box-shadow:0 0 5px var(--green);"></div>Live screen automated complex debugging</div>
+      <div class="future-item"><div class="future-dot" style="background:var(--amber);box-shadow:0 0 5px var(--amber);"></div>On-the-fly, autonomous project refactoring</div>
+      <div class="future-item"><div class="future-dot"></div>Contextual intelligence &amp; proactive assistance</div>
+      <div class="future-item"><div class="future-dot" style="background:var(--purple);box-shadow:0 0 5px var(--purple);"></div>Deep personalization for tailored interactions</div>
+    </div>
+  </div>
+</article>
+
+<!-- WINDOW: MIND GRAPH -->
+<article class="draggable-window" id="win-graph" style="width: 360px; height: 350px; left: 430px; top: 120px;">
+  <div class="window-titlebar">
+    <div class="traffic-lights">
+      <button class="light-btn light-close" onclick="closeWindow('graph')"></button>
+      <button class="light-btn light-min" onclick="closeWindow('graph')"></button>
+      <button class="light-btn light-max" onclick="maximizeWindow('graph')"></button>
+    </div>
+    <div class="window-title">🧠 Mind Graph</div>
+  </div>
+  <div class="window-body" style="padding:0">
+    <div id="graphContainer"></div>
+  </div>
+</article>
+
+<!-- WINDOW: TERMINAL -->
+<article class="draggable-window" id="win-shell" style="width: 460px; height: 280px; left: 120px; top: 480px;">
+  <div class="window-titlebar">
+    <div class="traffic-lights">
+      <button class="light-btn light-close" onclick="closeWindow('shell')"></button>
+      <button class="light-btn light-min" onclick="closeWindow('shell')"></button>
+      <button class="light-btn light-max" onclick="maximizeWindow('shell')"></button>
+    </div>
+    <div class="window-title">🖥️ Shell — vocal_terminal</div>
+  </div>
+  <div class="window-body">
+    <div class="terminal-console" id="termConsole">
+      <div class="term-line"><span class="term-sys">Yosemite Terminal Core initialized... ready</span></div>
+      <div class="term-line"><span class="term-prompt">PS C:\IP-Prime&gt;</span><span class="term-cmd"> Get-SystemStatus</span></div>
+      <div class="term-line"><span class="term-out">[✓] Nodes online. Swarm deck loaded on :8765</span></div>
+      <div class="term-line" style="display:flex;align-items:center;">
+        <span class="term-prompt" style="flex-shrink:0;">PS C:\IP-Prime&gt;</span>
+        <input type="text" id="termInput" onkeydown="handleTerminalKey(event)" style="background:transparent; border:none; outline:none; color:var(--cyan); font-family:'JetBrains Mono',monospace; font-size:11px; flex:1; margin-left:6px;">
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- WINDOW: SWARM DECK -->
+<article class="draggable-window" id="win-swarm" style="width: 300px; height: 240px; left: 820px; top: 100px;">
+  <div class="window-titlebar">
+    <div class="traffic-lights">
+      <button class="light-btn light-close" onclick="closeWindow('swarm')"></button>
+      <button class="light-btn light-min" onclick="closeWindow('swarm')"></button>
+      <button class="light-btn light-max" onclick="maximizeWindow('swarm')"></button>
+    </div>
+    <div class="window-title">💻 Swarm Deck</div>
+  </div>
+  <div class="window-body">
+    <div class="swarm-container" id="swarmContainer">
+      <!-- Populated dynamically -->
+    </div>
+  </div>
+</article>
+
+<!-- WINDOW: CONFIG -->
+<article class="draggable-window" id="win-config" style="width: 320px; height: 250px; left: 820px; top: 370px;">
+  <div class="window-titlebar">
+    <div class="traffic-lights">
+      <button class="light-btn light-close" onclick="closeWindow('config')"></button>
+      <button class="light-btn light-min" onclick="closeWindow('config')"></button>
+      <button class="light-btn light-max" onclick="maximizeWindow('config')"></button>
+    </div>
+    <div class="window-title">⚙️ Control Center</div>
+  </div>
+  <div class="window-body">
+    <div class="cfg-row">
+      <span class="cfg-lbl">Primary Model</span>
+      <span class="cfg-val" onclick="cycleModel(this)">gemini-2.5-flash</span>
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-lbl">Autonomous Mode</span>
+      <div class="cfg-toggle on" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-lbl">Voice Synthesis</span>
+      <div class="cfg-toggle" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-lbl">Local Ollama</span>
+      <div class="cfg-toggle on" onclick="this.classList.toggle('on')"></div>
+    </div>
+    <div class="cfg-row">
+      <span class="cfg-lbl">Context Window</span>
+      <span class="cfg-val">1M tokens</span>
+    </div>
+  </div>
+</article>
+
+<!-- WINDOW: FILES -->
+<article class="draggable-window" id="win-files" style="width: 340px; height: 260px; left: 610px; top: 480px;">
+  <div class="window-titlebar">
+    <div class="traffic-lights">
+      <button class="light-btn light-close" onclick="closeWindow('files')"></button>
+      <button class="light-btn light-min" onclick="closeWindow('files')"></button>
+      <button class="light-btn light-max" onclick="maximizeWindow('files')"></button>
+    </div>
+    <div class="window-title">📁 Workspace Files</div>
+  </div>
+  <div class="window-body">
+    <div class="drop-zone" id="dropZone"
+         ondragover="event.preventDefault();this.style.borderColor='var(--cyan)'"
+         ondragleave="this.style.borderColor=''"
+         ondrop="handleFileDrop(event)">
+      <div class="drop-zone-lbl">Drag workspace files here</div>
+      <div class="drop-zone-sub">Upload scripts, directories, logs</div>
+    </div>
+    <div class="file-list-view" id="fileList">
+      <div class="file-row"><span>🐍 agent_orchestrator.py</span><span style="color:var(--text-lo)">17.3 KB</span></div>
+      <div class="file-row"><span>🐍 prime_utils.py</span><span style="color:var(--text-lo)">21.9 KB</span></div>
+    </div>
+  </div>
+</article>
+
+
+<!-- ═══════════════════════════════════════════════
+   macOS BOTTOM DOCK
+═══════════════════════════════════════════════ */ -->
+<div class="dock-container">
+  <div class="dock-icon active" data-win="core" onclick="toggleWindow('core')">
+    🧬
+    <div class="dock-tooltip">Core Stats</div>
+  </div>
+  <div class="dock-icon active" data-win="graph" onclick="toggleWindow('graph')">
+    🧠
+    <div class="dock-tooltip">Mind Graph</div>
+  </div>
+  <div class="dock-icon active" data-win="shell" onclick="toggleWindow('shell')">
+    🖥️
+    <div class="dock-tooltip">Terminal Console</div>
+  </div>
+  <div class="dock-icon active" data-win="swarm" onclick="toggleWindow('swarm')">
+    💻
+    <div class="dock-tooltip">Swarm Deck</div>
+  </div>
+  <div class="dock-icon active" data-win="config" onclick="toggleWindow('config')">
+    ⚙️
+    <div class="dock-tooltip">Control Panel</div>
+  </div>
+  <div class="dock-icon active" data-win="files" onclick="toggleWindow('files')">
+    📁
+    <div class="dock-tooltip">Files Explorer</div>
+  </div>
+</div>
+
+
+<script>
+/* ══════════════════════════════════════════════
+   2D NEURAL CANVAS BACKGROUND
+══════════════════════════════════════════════ */
+(function initNeuralBackground() {
+  const canvas = document.getElementById('neuralCanvas');
+  const ctx = canvas.getContext('2d');
+  const NODE_COUNT = 80;
+  const nodes = [];
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    initNodes();
+  }
+
+  class NNode {
+    constructor() {
+      this.x  = Math.random() * canvas.width;
+      this.y  = Math.random() * canvas.height;
+      this.vx = (Math.random() - 0.5) * 0.6;
+      this.vy = (Math.random() - 0.5) * 0.6;
+      this.size = Math.random() * 2 + 1;
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      if (this.x < 0 || this.x > canvas.width)  this.vx *= -1;
+      if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,245,255,0.9)';
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#00f5ff';
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  function initNodes() {
+    nodes.length = 0;
+    for (let i = 0; i < NODE_COUNT; i++) nodes.push(new NNode());
+  }
+
+  function connectNodes() {
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const dx = nodes[i].x - nodes[j].x;
+        const dy = nodes[i].y - nodes[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 140) {
+          ctx.beginPath();
+          ctx.strokeStyle = `rgba(0,245,255,${(1 - dist / 140) * 0.65})`;
+          ctx.lineWidth = 0.8;
+          ctx.moveTo(nodes[i].x, nodes[i].y);
+          ctx.lineTo(nodes[j].x, nodes[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    nodes.forEach(n => { n.update(); n.draw(); });
+    connectNodes();
+    requestAnimationFrame(animate);
+  }
+
+  resize();
+  window.addEventListener('resize', resize);
+  animate();
+})();
+
+/* ══════════════════════════════════════════════
+   D3 DRAGGABLE WINDOWS (Yosemite Glass Dragging)
+══════════════════════════════════════════════ */
+let topZ = 100;
+
+d3.selectAll("article.draggable-window")
+  .style("z-index", (d, i) => topZ + i)
+  .call(
+    d3.drag()
+      .subject(function() {
+        const node = d3.select(this);
+        return { x: parseFloat(node.style("left")), y: parseFloat(node.style("top")) };
+      })
+      .container(document.body)
+      .on("start", function(event) {
+        // Bring window to top of pile
+        topZ += 10;
+        d3.select(this)
+          .style("z-index", topZ)
+          .classed("dragging", true);
+      })
+      .on("drag", function(event) {
+        d3.select(this)
+          .style("left", event.x + "px")
+          .style("top", event.y + "px");
+      })
+      .on("end", function() {
+        d3.select(this).classed("dragging", false);
+      })
+  );
+
+/* ══════════════════════════════════════════════
+   WINDOW CONTROL ACTIONS
+══════════════════════════════════════════════ */
+function closeWindow(winId) {
+  const win = document.getElementById('win-' + winId);
+  if (win) win.classList.add('minimized');
+  const icon = document.querySelector(`.dock-icon[data-win="${winId}"]`);
+  if (icon) icon.classList.remove('active');
+}
+
+function toggleWindow(winId) {
+  const win = document.getElementById('win-' + winId);
+  const icon = document.querySelector(`.dock-icon[data-win="${winId}"]`);
+  if (!win || !icon) return;
+
+  if (win.classList.contains('minimized')) {
+    topZ += 5;
+    win.style.zIndex = topZ;
+    win.classList.remove('minimized');
+    icon.classList.add('active');
+    // Lazy init graph
+    if (winId === 'graph') initGraph();
+  } else {
+    win.classList.add('minimized');
+    icon.classList.remove('active');
+  }
+}
+
+function maximizeWindow(winId) {
+  const win = document.getElementById('win-' + winId);
+  if (!win) return;
+  
+  if (win.style.width === '100vw' && win.style.height === '100vh') {
+    // Restore defaults
+    win.style.width = win.dataset.prevWidth || '400px';
+    win.style.height = win.dataset.prevHeight || '300px';
+    win.style.left = win.dataset.prevLeft || '100px';
+    win.style.top = win.dataset.prevTop || '100px';
+  } else {
+    // Save current layout
+    win.dataset.prevWidth = win.style.width;
+    win.dataset.prevHeight = win.style.height;
+    win.dataset.prevLeft = win.style.left;
+    win.dataset.prevTop = win.style.top;
+    
+    // Stretch full
+    win.style.width = '100vw';
+    win.style.height = 'calc(100vh - 24px)';
+    win.style.left = '0px';
+    win.style.top = '24px';
+  }
+}
+
+/* ══════════════════════════════════════════════
+   CLOCK AND LIVE SYSTEM METRICS (Top Menu Bar)
+══════════════════════════════════════════════ */
+function updateClock() {
+  const now = new Date();
+  const options = { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true };
+  document.getElementById('menuClock').textContent = now.toLocaleString('en-US', options).replace(',', '');
+}
+updateClock();
+setInterval(updateClock, 30000);
+
+// Fluctuate CPU/RAM metrics live
+let cpu = 24, ram = 68;
+function updateSystemMetrics() {
+  cpu = Math.max(5, Math.min(95, cpu + (Math.random() - 0.5) * 8));
+  ram = Math.max(40, Math.min(90, ram + (Math.random() - 0.5) * 2));
+  document.getElementById('menuCpu').textContent = Math.round(cpu) + '%';
+  document.getElementById('menuRam').textContent = Math.round(ram) + '%';
+}
+setInterval(updateSystemMetrics, 2000);
+updateSystemMetrics();
+
+/* ══════════════════════════════════════════════
+   VIS.JS KNOWLEDGE GRAPH
+══════════════════════════════════════════════ */
+let graphNetwork = null;
+function initGraph() {
+  if (graphNetwork) return;
+  const nodes = new vis.DataSet([
+    {id:1, label:'IP PRIME', shape:'dot', size:24, color:{background:'#00f5ff',border:'#00f5ff'}, font:{color:'#fff',size:11,face:'Outfit'}},
+    {id:2, label:'Gemini 2.5', color:{background:'#a855f7',border:'#a855f7'}, font:{color:'#fff',size:9,face:'Outfit'}},
+    {id:3, label:'Llama 3.1',  color:{background:'#10b981',border:'#10b981'}, font:{color:'#fff',size:9,face:'Outfit'}},
+    {id:4, label:'GPT-4o',     color:{background:'#f59e0b',border:'#f59e0b'}, font:{color:'#fff',size:9,face:'Outfit'}},
+    {id:5, label:'Memory',     color:{background:'#3b82f6',border:'#3b82f6'}, font:{color:'#fff',size:9,face:'Outfit'}},
+    {id:6, label:'Swarm',      color:{background:'#ef4444',border:'#ef4444'}, font:{color:'#fff',size:9,face:'Outfit'}},
+  ]);
+  const edges = new vis.DataSet([
+    {from:1,to:2,color:{color:'rgba(168,85,247,0.4)'}},
+    {from:1,to:3,color:{color:'rgba(16,185,129,0.4)'}},
+    {from:1,to:4,color:{color:'rgba(245,158,11,0.4)'}},
+    {from:1,to:5,color:{color:'rgba(59,130,246,0.4)'}},
+    {from:1,to:6,color:{color:'rgba(239,68,68,0.4)'}},
+  ]);
+  const container = document.getElementById('graphContainer');
+  graphNetwork = new vis.Network(container, {nodes, edges}, {
+    background: 'transparent',
+    physics: { stabilization: false, barnesHut: { gravitationalConstant: -1800, springLength: 80 } },
+    nodes: { borderWidth: 1 },
+    edges: { smooth: { type: 'continuous' } },
+  });
+}
+setTimeout(initGraph, 500);
+
+/* ══════════════════════════════════════════════
+   SWARM DECK LOADER
+══════════════════════════════════════════════ */
+const agents = [
+  { name: "Architect Agent", task: "Planning modules...", progress: 85, status: "running" },
+  { name: "Coder Agent", task: "Writing PyQt elements...", progress: 42, status: "running" },
+  { name: "Debugger Agent", task: "Standing by...", progress: 0, status: "idle" }
+];
+function renderSwarm() {
+  const container = document.getElementById('swarmContainer');
+  container.innerHTML = '';
+  agents.forEach((a, i) => {
+    const card = document.createElement('div');
+    card.className = 'swarm-agent-card';
+    card.innerHTML = `
+      <div class="agent-header">
+        <span>${a.name}</span>
+        <span class="agent-status ${a.status}">${a.status.toUpperCase()}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text-lo)">${a.task}</div>
+      <div class="agent-progress-wrap">
+        <div class="agent-progress-bar" id="agent-bar-${i}" style="width:${a.progress}%"></div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+renderSwarm();
+
+// Fluctuate progress bars
+setInterval(() => {
+  agents.forEach((a, i) => {
+    if (a.status === 'running') {
+      a.progress = Math.min(100, a.progress + Math.floor(Math.random() * 5));
+      const bar = document.getElementById('agent-bar-' + i);
+      if (bar) bar.style.width = a.progress + '%';
+      if (a.progress >= 100) a.status = 'idle';
+    }
+  });
+}, 1500);
+
+/* ══════════════════════════════════════════════
+   SHELL LOGS & INTERACTIVE INPUT
+══════════════════════════════════════════════ */
+const logMsgs = [
+  "✔ Websocket tunnel online on :8765",
+  "⚡ Executing routine checks...",
+  "🧠 Memory graph node linked (Files -> Core)",
+  "● CPU optimization cycle completed",
+  "⚠ High RAM payload detected. Purging cache..."
+];
+let logIdx = 0;
+
+function appendConsoleLine(htmlContent) {
+  const c = document.getElementById('termConsole');
+  if (!c) return;
+  
+  // Find current input line and remove it temporarily
+  const inputLine = c.querySelector('.term-line:last-child');
+  if (inputLine) inputLine.remove();
+  
+  // Add new line
+  const line = document.createElement('div');
+  line.className = 'term-line';
+  line.innerHTML = htmlContent;
+  c.appendChild(line);
+  
+  // Re-add input line
+  const nextInputLine = document.createElement('div');
+  nextInputLine.className = 'term-line';
+  nextInputLine.style.display = 'flex';
+  nextInputLine.style.alignItems = 'center';
+  nextInputLine.innerHTML = `
+    <span class="term-prompt" style="flex-shrink:0;">PS C:\\IP-Prime&gt;</span>
+    <input type="text" id="termInput" onkeydown="handleTerminalKey(event)" style="background:transparent; border:none; outline:none; color:var(--cyan); font-family:'JetBrains Mono',monospace; font-size:11px; flex:1; margin-left:6px;">
+  `;
+  c.appendChild(nextInputLine);
+  
+  const inputEl = document.getElementById('termInput');
+  if (inputEl) inputEl.focus();
+  
+  c.scrollTop = c.scrollHeight;
+}
+
+// Background auto logs
+setInterval(() => {
+  appendConsoleLine(`<span class="term-out">${logMsgs[logIdx % logMsgs.length]}</span>`);
+  logIdx++;
+}, 6000);
+
+async function handleTerminalKey(event) {
+  if (event.key === 'Enter') {
+    const inputVal = event.target.value.trim();
+    if (!inputVal) return;
+    
+    // Log user command
+    appendConsoleLine(`<span class="term-cmd">${inputVal}</span>`);
+    
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: inputVal })
+      });
+      const data = await response.json();
+      const reply = data.reply || `Command dispatched: ${inputVal}`;
+      appendConsoleLine(`<span class="term-sys">${reply}</span>`);
+    } catch (err) {
+      appendConsoleLine(`<span class="term-err">Error sending command: ${err.message}</span>`);
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════
+   FILE EXPLORER UPLOAD
+══════════════════════════════════════════════ */
+function handleFileDrop(e) {
+  e.preventDefault();
+  const files = Array.from(e.dataTransfer.files);
+  const list = document.getElementById('fileList');
+  files.forEach(f => {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    row.innerHTML = `<span>📄 ${f.name}</span><span style="color:var(--text-lo)">${(f.size/1024).toFixed(1)} KB</span>`;
+    list.insertBefore(row, list.firstChild);
+  });
+}
+
+/* ══════════════════════════════════════════════
+   MODEL SWITCHER
+══════════════════════════════════════════════ */
+const models = ['gemini-2.5-flash','gemini-2.5-pro','claude-3.5-sonnet','gpt-4o'];
+let mIdx = 0;
+function cycleModel(el) {
+  mIdx = (mIdx + 1) % models.length;
+  el.textContent = models[mIdx];
+}
+</script>
+</body>
+</html>

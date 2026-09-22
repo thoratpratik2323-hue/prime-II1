@@ -1,0 +1,39 @@
+# Environment & Secrets (NEVER COMMIT)
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Environments
+.venv/
+venv/
+ENV/
+
+# Temp audio & caches
+*.mp3
+*.wav
+*.tmp
+temp/
+static/ip_prime_edge_*
+static/voice_*
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Databases & local user state
+*.db
+*.sqlite
+*.sqlite3
+*.log
+memory/temp_camera.jpg
+memory/archive/*.jsonl
+scratch/ip-codemaker-agent/
+scratch/mark-liv/
+scratch/prime-agent/
+

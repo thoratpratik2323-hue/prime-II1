@@ -1,0 +1,52 @@
+body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #800000; /* Maroon background */
+    color: #FFFFFF; /* White text for contrast */
+    text-align: center;
+    overflow: hidden;
+}
+
+.container {
+    background-color: rgba(255, 0, 0, 0.8); /* Semi-transparent Red */
+    padding: 50px 70px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    border: 5px solid #0000FF; /* Blue border */
+    position: relative;
+    animation: fadeIn 2s ease-in-out;
+}
+
+h1 {
+    font-size: 4em;
+    margin-bottom: 20px;
+    color: #FFFFFF; /* White heading */
+    text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7);
+}
+
+p {
+    font-size: 1.5em;
+    margin-bottom: 10px;
+    color: #FFD700; /* A touch of gold for elegance, but sticking to requested colors where possible */
+    color: #FFFFFF; /* Reverting to white for requested colors */
+}
+
+/* Optional: Adding some dynamic flair for "cool and beautiful" */
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulseBorder {
+    0% { border-color: #0000FF; }
+    50% { border-color: #FF0000; }
+    100% { border-color: #0000FF; }
+}
+
+.container {
+    animation: fadeIn 2s ease-in-out, pulseBorder 4s infinite alternate;
+}

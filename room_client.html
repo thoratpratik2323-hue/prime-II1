@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>PRIME AI — Autonomous Mobile Cockpit</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cyan: #00e5ff;
+      --cyan-dim: #00b8d4;
+      --amber: #ffab00;
+      --green: #00e676;
+      --red: #ff1744;
+      --purple: #7c4dff;
+      --bg: #030a16;
+      --surface: rgba(0, 229, 255, 0.05);
+      --border: rgba(0, 229, 255, 0.2);
+      --text: #e0f7fa;
+      --text-dim: #78909c;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+      background-size: 32px 32px;
+      z-index: 0;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100vh;
+      padding: 20px 16px;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      width: 100%;
+    }
+    .header .logo {
+      font-family: 'Orbitron', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 5px;
+      color: var(--cyan);
+      text-transform: uppercase;
+    }
+    .header .title {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(20px, 5.5vw, 26px);
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: #fff;
+      margin-top: 4px;
+      text-shadow: 0 0 25px rgba(0,229,255,0.6);
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      margin-top: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .status-badge.online .dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .status-badge.listening .dot { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+    .status-badge.thinking .dot { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+    .status-badge.speaking .dot { background: var(--purple); box-shadow: 0 0 10px var(--purple); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* ── Orb Container ── */
+    .orb-container {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 10px 0;
+    }
+    .orb-ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px dashed rgba(0,229,255,0.3);
+      animation: spin 30s linear infinite;
+    }
+    .orb-ring.r1 { width: 230px; height: 230px; }
+    .orb-ring.r2 { width: 270px; height: 270px; border-style: dotted; animation-duration: 45s; animation-direction: reverse; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    .orb {
+      width: 170px; height: 170px;
+      border-radius: 50%;
+      position: relative;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 35% 35%, #00e5ff 0%, #007799 40%, #001e2e 80%);
+      box-shadow: 0 0 40px rgba(0,229,255,0.4), inset 0 0 25px rgba(255,255,255,0.3);
+      transition: all 0.4s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .orb.listening {
+      background: radial-gradient(circle at 35% 35%, #00e5ff 0%, #00b4d8 40%, #003049 80%);
+      box-shadow: 0 0 70px rgba(0,229,255,0.9);
+      transform: scale(1.06);
+    }
+    .orb.thinking {
+      background: radial-gradient(circle at 35% 35%, #ffab00 0%, #e65100 50%, #210800 80%);
+      box-shadow: 0 0 70px rgba(255,171,0,0.8);
+      animation: pulseAmber 1s ease-in-out infinite alternate;
+    }
+    .orb.speaking {
+      background: radial-gradient(circle at 35% 35%, #7c4dff 0%, #512da8 50%, #12002b 80%);
+      box-shadow: 0 0 80px rgba(124,77,255,0.8);
+      animation: pulsePurple 0.6s ease-in-out infinite alternate;
+    }
+    @keyframes pulseAmber { from { transform: scale(1.0); } to { transform: scale(1.08); } }
+    @keyframes pulsePurple { from { transform: scale(1.02); } to { transform: scale(1.1); } }
+
+    .orb-icon { font-size: 38px; }
+    .orb-sub { font-family: 'Orbitron', monospace; font-size: 9px; letter-spacing: 2px; margin-top: 6px; color: #fff; font-weight: 700; }
+
+    /* ── Waveform ── */
+    .waveform {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      height: 30px;
+      margin-top: 14px;
+    }
+    .wave-bar {
+      width: 4px; height: 6px;
+      background: var(--cyan);
+      border-radius: 2px;
+      transition: height 0.1s ease;
+    }
+
+    /* ── Response Card ── */
+    .chat-card {
+      width: 100%;
+      background: rgba(3, 15, 30, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      min-height: 80px;
+      max-height: 140px;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.4;
+      color: #cfd8dc;
+      backdrop-filter: blur(8px);
+    }
+    .chat-user { color: var(--cyan); font-weight: 600; margin-bottom: 4px; font-size: 11px; }
+    .chat-ai { color: #fff; }
+
+    /* ── Suggestions ── */
+    .chips {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      width: 100%;
+      padding: 4px 0;
+      scrollbar-width: none;
+    }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--cyan);
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 11px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    /* ── Controls ── */
+    .controls {
+      width: 100%;
+      display: flex;
+      gap: 8px;
+    }
+    .text-input {
+      flex: 1;
+      background: rgba(0, 229, 255, 0.05);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 12px 18px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+    }
+    .text-input::placeholder { color: var(--text-dim); }
+    .btn-send {
+      background: var(--cyan);
+      color: #020912;
+      border: none;
+      border-radius: 50%;
+      width: 46px; height: 46px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <div class="logo">Autonomous Digital Cockpit</div>
+      <div class="title">PRIME AI</div>
+      <div id="badge" class="status-badge online">
+        <span class="dot"></span>
+        <span id="badgeText">NEURAL LINK READY</span>
+      </div>
+    </div>
+
+    <div class="orb-container">
+      <div class="orb-ring r1"></div>
+      <div class="orb-ring r2"></div>
+      <div id="orb" class="orb" onclick="toggleVoice()">
+        <div id="orbIcon" class="orb-icon">🎙️</div>
+        <div id="orbSub" class="orb-sub">TAP TO SPEAK</div>
+      </div>
+      <div id="waveform" class="waveform"></div>
+    </div>
+
+    <div class="chat-card" id="chatCard">
+      <div id="chatUser" class="chat-user">Prime Neural Cockpit Online</div>
+      <div id="chatAi" class="chat-ai">Tap the orb or use the mic to speak directly with Prime from your mobile device.</div>
+    </div>
+
+    <div class="chips">
+      <div class="chip" onclick="sendPrompt('Good morning Prime, give me my morning briefing')">🌅 Morning Briefing</div>
+      <div class="chip" onclick="sendPrompt('What is the weather in Pune today?')">⛅ Pune Weather</div>
+      <div class="chip" onclick="sendPrompt('Open YouTube')">▶️ Open YouTube</div>
+      <div class="chip" onclick="sendPrompt('Check my Obsidian notes on SAT')">📚 Obsidian Notes</div>
+      <div class="chip" onclick="sendPrompt('What is my current CPU and RAM status?')">💻 System Stats</div>
+    </div>
+
+    <div class="controls">
+      <input type="text" id="promptInput" class="text-input" placeholder="Type command or tap Orb..." onkeydown="if(event.key==='Enter') sendText()" />
+      <button class="btn-send" onclick="sendText()">➤</button>
+    </div>
+  </div>
+
+  <audio id="audioPlayer" playsinline></audio>
+
+  <script>
+    const orb = document.getElementById('orb');
+    const orbIcon = document.getElementById('orbIcon');
+    const orbSub = document.getElementById('orbSub');
+    const badge = document.getElementById('badge');
+    const badgeText = document.getElementById('badgeText');
+    const chatUser = document.getElementById('chatUser');
+    const chatAi = document.getElementById('chatAi');
+    const input = document.getElementById('promptInput');
+    const audioPlayer = document.getElementById('audioPlayer');
+    const waveform = document.getElementById('waveform');
+
+    // Create wave bars
+    const numBars = 16;
+    const bars = [];
+    for(let i=0; i<numBars; i++) {
+      const b = document.createElement('div');
+      b.className = 'wave-bar';
+      waveform.appendChild(b);
+      bars.push(b);
+    }
+
+    let isListening = false;
+    let recognition = null;
+
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRec();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-IN';
+
+      recognition.onstart = () => {
+        isListening = true;
+        setOrbState('listening', 'LISTENING...', '🎙️', 'cyan');
+        animateWave(true);
+      };
+
+      recognition.onresult = (e) => {
+        const text = e.results[0][0].transcript;
+        animateWave(false);
+        sendPrompt(text);
+      };
+
+      recognition.onerror = (e) => {
+        console.warn(e);
+        setOrbState('online', 'TAP TO SPEAK', '🎙️', 'green');
+        animateWave(false);
+        isListening = false;
+      };
+
+      recognition.onend = () => {
+        isListening = false;
+        animateWave(false);
+      };
+    }
+
+    function toggleVoice() {
+      if (recognition) {
+        if (isListening) {
+          recognition.stop();
+        } else {
+          try {
+            audioPlayer.play().catch(()=>{}); // Unlock mobile audio context
+            recognition.start();
+          } catch(e) { console.error(e); }
+        }
+      } else {
+        alert("Microphone API not supported in this browser. Please type your message.");
+      }
+    }
+
+    function setOrbState(stateClass, label, icon, badgeColor) {
+      orb.className = `orb ${stateClass}`;
+      orbSub.textContent = label;
+      orbIcon.textContent = icon;
+      badge.className = `status-badge ${stateClass}`;
+      badgeText.textContent = label;
+    }
+
+    let waveTimer = null;
+    function animateWave(active) {
+      if(waveTimer) clearInterval(waveTimer);
+      if(active) {
+        waveTimer = setInterval(() => {
+          bars.forEach(b => {
+            const h = Math.floor(Math.random() * 26) + 4;
+            b.style.height = h + 'px';
+          });
+        }, 100);
+      } else {
+        bars.forEach(b => b.style.height = '6px');
+      }
+    }
+
+    function sendText() {
+      const val = input.value.trim();
+      if(val) {
+        sendPrompt(val);
+        input.value = '';
+      }
+    }
+
+    async function sendPrompt(text) {
+      chatUser.textContent = `You: "${text}"`;
+      chatAi.textContent = "Processing neural command...";
+      setOrbState('thinking', 'THINKING...', '⚡', 'amber');
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+
+        if(data.ok) {
+          chatAi.textContent = data.reply;
+          if(data.audio_url) {
+            setOrbState('speaking', 'SPEAKING...', '🔊', 'purple');
+            animateWave(true);
+            audioPlayer.src = data.audio_url;
+            audioPlayer.play().catch(e => console.log('Autoplay blocked:', e));
+            audioPlayer.onended = () => {
+              setOrbState('online', 'TAP TO SPEAK', '🎙️', 'green');
+              animateWave(false);
+            };
+          } else {
+            setOrbState('online', 'TAP TO SPEAK', '🎙️', 'green');
+          }
+        } else {
+          chatAi.textContent = "Error: " + (data.error || "Failed to process command.");
+          setOrbState('online', 'TAP TO SPEAK', '🎙️', 'green');
+        }
+      } catch(err) {
+        chatAi.textContent = "Connection error with PC: " + err.message;
+        setOrbState('online', 'TAP TO SPEAK', '🎙️', 'green');
+      }
+    }
+  </script>
+</body>
+</html>

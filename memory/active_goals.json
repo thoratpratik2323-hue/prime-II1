@@ -1,0 +1,126 @@
+{
+  "active_goal": {
+    "objective": "Test Comprehensive Audit",
+    "status": "IN_PROGRESS",
+    "progress_percent": 50.0,
+    "subtasks": [
+      {
+        "title": "Audit 1",
+        "done": true
+      },
+      {
+        "title": "Audit 2",
+        "done": false
+      }
+    ],
+    "created_at": "2026-09-21T08:48:30.752453",
+    "updated_at": "2026-09-21T08:48:30.753465",
+    "notes": [
+      "Goal initiated."
+    ]
+  },
+  "history": [
+    {
+      "objective": "Build Autonomous Prime Cockpit",
+      "status": "IN_PROGRESS",
+      "progress_percent": 0.0,
+      "subtasks": [
+        {
+          "title": "Setup Voice",
+          "done": false
+        },
+        {
+          "title": "Integrate Tools",
+          "done": false
+        },
+        {
+          "title": "Add Free LLMs",
+          "done": false
+        }
+      ],
+      "created_at": "2026-09-20T23:53:11.148052",
+      "updated_at": "2026-09-20T23:53:11.148052",
+      "notes": [
+        "Goal initiated."
+      ]
+    },
+    {
+      "objective": "Test Autonomous Engine",
+      "status": "CANCELLED",
+      "progress_percent": 75.0,
+      "subtasks": [
+        {
+          "title": "Design specs",
+          "done": true
+        },
+        {
+          "title": "Write code",
+          "done": false
+        },
+        {
+          "title": "Run tests",
+          "done": false
+        },
+        {
+          "title": "Deploy release",
+          "done": false
+        }
+      ],
+      "created_at": "2026-09-21T08:26:49.518169",
+      "updated_at": "2026-09-21T08:26:49.523438",
+      "notes": [
+        "Goal initiated.",
+        "[08:26:49] Major milestone reached"
+      ]
+    },
+    {
+      "objective": "Test Autonomous Engine",
+      "status": "CANCELLED",
+      "progress_percent": 75.0,
+      "subtasks": [
+        {
+          "title": "Design specs",
+          "done": true
+        },
+        {
+          "title": "Write code",
+          "done": false
+        },
+        {
+          "title": "Run tests",
+          "done": false
+        },
+        {
+          "title": "Deploy release",
+          "done": false
+        }
+      ],
+      "created_at": "2026-09-21T08:40:44.024634",
+      "updated_at": "2026-09-21T08:40:44.029728",
+      "notes": [
+        "Goal initiated.",
+        "[08:40:44] Major milestone reached"
+      ]
+    },
+    {
+      "objective": "Test Comprehensive Audit",
+      "status": "CANCELLED",
+      "progress_percent": 50.0,
+      "subtasks": [
+        {
+          "title": "Audit 1",
+          "done": true
+        },
+        {
+          "title": "Audit 2",
+          "done": false
+        }
+      ],
+      "created_at": "2026-09-21T08:46:53.770932",
+      "updated_at": "2026-09-21T08:46:53.772446",
+      "notes": [
+        "Goal initiated."
+      ]
+    }
+  ]
+}

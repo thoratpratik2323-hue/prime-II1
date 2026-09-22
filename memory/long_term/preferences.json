@@ -1,0 +1,18 @@
+{
+  "language_preference": {
+    "value": "Marathi",
+    "updated": "2026-06-03"
+  },
+  "college_fee_budget_yearly": {
+    "value": "1 to 1.20 lakh",
+    "updated": "2026-05-27"
+  },
+  "frequent_moods": {
+    "value": "{\"Focused\": 80, \"Stressed\": 1}",
+    "updated": "2026-07-11"
+  },
+  "daily_chess_limit_minutes": {
+    "value": "30",
+    "updated": "2026-06-28"
+  }
+}

@@ -1,0 +1,354 @@
+import json
+import re
+import sys
+import threading
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from typing import Callable
+
+IP_OUTPUT_DIR = Path(r"C:\Users\thora\Downloads\output")
+IP_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+from agent.planner       import create_plan, replan
+from agent.error_handler import analyze_error, generate_fix, ErrorDecision
+
+
+def get_base_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parent.parent
+
+
+BASE_DIR        = get_base_dir()
+API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+
+
+def _get_api_key() -> str:
+    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)["gemini_api_key"]
+
+def _run_generated_code(description: str, speak: Callable | None = None) -> str:
+    from google import genai
+
+    if speak:
+        speak("Writing custom code for this task, sir.")
+
+    home      = Path.home()
+    desktop   = home / "Desktop"
+    downloads = home / "Downloads"
+    documents = home / "Documents"
+
+    if not desktop.exists():
+        try:
+            import winreg
+            key     = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders")
+            desktop = Path(winreg.QueryValueEx(key, "Desktop")[0])
+        except Exception:
+            pass
+
+    client = genai.Client(api_key=_get_api_key())
+
+    system_prompt = (
+        "You are an expert Python developer. "
+        "Write clean, complete, working Python code. "
+        "Use standard library + common packages. "
+        "Install missing packages with subprocess + pip if needed. "
+        "Return ONLY the Python code. No explanation, no markdown, no backticks.\n\n"
+        f"SYSTEM PATHS:\n"
+        f"  Desktop   = r'{desktop}'\n"
+        f"  Downloads = r'{downloads}'\n"
+        f"  Documents = r'{documents}'\n"
+        f"  Home      = r'{home}'\n"
+        f"  IP Output = r'{IP_OUTPUT_DIR}'\n"
+    )
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=f"Write Python code to accomplish this task:\n\n{description}",
+            config=genai.types.GenerateContentConfig(system_instruction=system_prompt),
+        )
+        code = response.text.strip()
+        code = re.sub(r"```(?:python)?", "", code).strip().rstrip("`").strip()
+
+        # Save to IP output folder with timestamp so it's reviewable + re-runnable
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_desc = re.sub(r"[^\w]", "_", description[:40]).strip("_")
+        out_path  = IP_OUTPUT_DIR / f"{timestamp}_{safe_desc}.py"
+        out_path.write_text(code, encoding="utf-8")
+        print(f"[Executor] 💾 Code saved to: {out_path}")
+
+        print(f"[Executor] 🐍 Running generated code: {out_path}")
+
+        result = subprocess.run(
+            [sys.executable, str(out_path)],
+            capture_output=True, text=True,
+            timeout=120, cwd=str(IP_OUTPUT_DIR)
+        )
+
+        output = result.stdout.strip()
+        error  = result.stderr.strip()
+
+        # Save stdout/stderr log next to the script
+        log_path = out_path.with_suffix(".log")
+        with open(log_path, "w", encoding="utf-8") as lf:
+            lf.write(f"=== STDOUT ===\n{output}\n\n=== STDERR ===\n{error}\n")
+
+        if result.returncode == 0 and output:
+            return output
+        elif result.returncode == 0:
+            return "Task completed successfully."
+        elif error:
+            raise RuntimeError(f"Code error: {error[:400]}")
+        return "Completed."
+
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Generated code timed out after 120 seconds.")
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(f"Generated code failed: {e}")
+
+def _inject_context(params: dict, tool: str, step_results: dict, goal: str = "") -> dict:
+    if not step_results:
+        return params
+
+    params = dict(params)
+
+    if tool == "file_controller" and params.get("action") in ("write", "create_file"):
+        content = params.get("content", "")
+        if not content or len(content) < 50:
+            all_results = [
+                v for v in step_results.values()
+                if v and len(v) > 100 and v not in ("Done.", "Completed.")
+            ]
+            if all_results:
+                combined = "\n\n---\n\n".join(all_results)
+                translated = _translate_to_goal_language(combined, goal)
+                params["content"] = translated
+                print("[Executor] 💉 Injected + translated content")
+
+    return params
+def _detect_language(text: str) -> str:
+    from google import genai
+    client = genai.Client(api_key=_get_api_key())
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=(
+                f"What language is this text written in? "
+                f"Reply with ONLY the language name in English (e.g. Turkish, English, French).\n\n"
+                f"Text: {text[:200]}"
+            ),
+        )
+        return response.text.strip()
+    except Exception:
+        return "English"
+
+
+def _translate_to_goal_language(content: str, goal: str) -> str:
+    if not goal:
+        return content
+    try:
+        from google import genai
+        client = genai.Client(api_key=_get_api_key())
+
+        target_lang = _detect_language(goal)
+        print(f"[Executor] 🌐 Translating to: {target_lang}")
+
+        prompt = (
+            f"You are a professional translator. "
+            f"Translate the following text into {target_lang}.\n"
+            f"IMPORTANT:\n"
+            f"- Translate EVERYTHING, leave nothing in English\n"
+            f"- Keep all facts, numbers, and data intact\n"
+            f"- Keep the structure and formatting\n"
+            f"- Output ONLY the translated text, nothing else\n\n"
+            f"Text to translate:\n{content[:4000]}"
+        )
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+        translated = response.text.strip()
+        print(f"[Executor] ✅ Translation done ({target_lang})")
+        return translated
+    except Exception as e:
+        print(f"[Executor] ⚠️ Translation failed: {e}")
+        return content
+
+def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
+    # 1. Run through SafetyGuard first!
+    from agent.safety_guard import SafetyGuard
+    approved, msg = SafetyGuard.verify_action(tool, parameters)
+    if not approved:
+        raise PermissionError(f"SafetyGuard Blocked Action: {msg}")
+
+    if tool == "generated_code":
+        description = parameters.get("description", "")
+        if not description:
+            raise ValueError("generated_code requires a 'description' parameter.")
+        return _run_generated_code(description, speak=speak)
+
+    # Use dynamic skills manager to execute core & dynamic tools
+    from agent.skills_manager import get_all_tools, execute_tool_action
+    
+    tools = get_all_tools()
+    if tool in tools:
+        return execute_tool_action(tool, parameters, speak=speak)
+    
+    print(f"[Executor] [Warning] Unknown tool '{tool}' — falling back to generated_code")
+    return _run_generated_code(f"Accomplish this task: {parameters}", speak=speak)
+
+class AgentExecutor:
+
+    MAX_REPLAN_ATTEMPTS = 2
+
+    def execute(
+        self,
+        goal:        str,
+        speak:       Callable | None        = None,
+        cancel_flag: threading.Event | None = None,
+    ) -> str:
+        print(f"\n[Executor] 🎯 Goal: {goal}")
+
+        replan_attempts = 0
+        completed_steps = []
+        step_results    = {} 
+        plan            = create_plan(goal)
+
+        while True:
+            steps = plan.get("steps", [])
+
+            if not steps:
+                msg = "I couldn't create a valid plan for this task, sir."
+                if speak: speak(msg)
+                return msg
+
+            success      = True
+            failed_step  = None
+            failed_error = ""
+
+            for step in steps:
+                if cancel_flag and cancel_flag.is_set():
+                    if speak: speak("Task cancelled, sir.")
+                    return "Task cancelled."
+
+                step_num = step.get("step", "?")
+                tool     = step.get("tool", "generated_code")
+                desc     = step.get("description", "")
+                params   = step.get("parameters", {})
+
+                params = _inject_context(params, tool, step_results, goal=goal)
+
+                print(f"\n[Executor] ▶️ Step {step_num}: [{tool}] {desc}")
+
+                attempt = 1
+                step_ok = False
+
+                while attempt <= 3:
+                    if cancel_flag and cancel_flag.is_set():
+                        break
+                    try:
+                        result = _call_tool(tool, params, speak)
+                        step_results[step_num] = result 
+                        completed_steps.append(step)
+                        print(f"[Executor] ✅ Step {step_num} done: {str(result)[:100]}")
+                        step_ok = True
+                        break
+
+                    except Exception as e:
+                        error_msg = str(e)
+                        print(f"[Executor] ❌ Step {step_num} attempt {attempt} failed: {error_msg}")
+
+                        recovery = analyze_error(step, error_msg, attempt=attempt)
+                        decision = recovery["decision"]
+                        user_msg = recovery.get("user_message", "")
+
+                        if speak and user_msg:
+                            speak(user_msg)
+
+                        if decision == ErrorDecision.RETRY:
+                            attempt += 1
+                            import time; time.sleep(2)
+                            continue
+
+                        elif decision == ErrorDecision.SKIP:
+                            print(f"[Executor] ⏭️ Skipping step {step_num}")
+                            completed_steps.append(step)
+                            step_ok = True
+                            break
+
+                        elif decision == ErrorDecision.ABORT:
+                            msg = f"Task aborted, sir. {recovery.get('reason', '')}"
+                            if speak: speak(msg)
+                            return msg
+
+                        else: 
+                            fix_suggestion = recovery.get("fix_suggestion", "")
+                            if fix_suggestion and tool != "generated_code":
+                                try:
+                                    fixed_step = generate_fix(step, error_msg, fix_suggestion)
+                                    if speak: speak("Trying an alternative approach, sir.")
+                                    res = _call_tool(
+                                        fixed_step["tool"],
+                                        fixed_step["parameters"],
+                                        speak
+                                    )
+                                    step_results[step_num] = res
+                                    completed_steps.append(step)
+                                    step_ok = True
+                                    break
+                                except Exception as fix_err:
+                                    print(f"[Executor] ⚠️ Fix failed: {fix_err}")
+
+                            failed_step  = step
+                            failed_error = error_msg
+                            success      = False
+                            break
+
+                if not step_ok and not failed_step:
+                    failed_step  = step
+                    failed_error = "Max retries exceeded"
+                    success      = False
+
+                if not success:
+                    break
+
+            if success:
+                return self._summarize(goal, completed_steps, speak)
+
+            if replan_attempts >= self.MAX_REPLAN_ATTEMPTS:
+                msg = f"Task failed after {replan_attempts} replan attempts, sir."
+                if speak: speak(msg)
+                return msg
+
+            if speak: speak("Adjusting my approach, sir.")
+
+            replan_attempts += 1
+            plan = replan(goal, completed_steps, failed_step, failed_error)
+
+    def _summarize(self, goal: str, completed_steps: list, speak: Callable | None) -> str:
+        fallback = f"All done, sir. Completed {len(completed_steps)} steps for: {goal[:60]}."
+        try:
+            from google import genai
+            client    = genai.Client(api_key=_get_api_key())
+            steps_str = "\n".join(f"- {s.get('description', '')}" for s in completed_steps)
+            prompt    = (
+                f'User goal: "{goal}"\n'
+                f"Completed steps:\n{steps_str}\n\n"
+                "Write a single natural sentence summarizing what was accomplished. "
+                "Address the user as 'sir'. Be direct and positive."
+            )
+            response = client.models.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=prompt,
+            )
+            summary  = response.text.strip()
+            if speak: speak(summary)
+            return summary
+        except Exception:
+            if speak: speak(fallback)
+            return fallback
