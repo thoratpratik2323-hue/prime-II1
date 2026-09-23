@@ -27,12 +27,12 @@ FREE_PROVIDERS: List[Dict[str, Any]] = [
         "name": "Groq LPU (Ultra-Fast)",
         "env_var": "GROQ_API_KEY",
         "base_url": "https://api.groq.com/openai/v1",
-        "default_model": "llama-3.3-70b-versatile",
+        "default_model": "openai/gpt-oss-120b",
         "free_tier": "30 RPM, 14,400 RPD, 500+ tokens/sec",
         "credit_card": "NO",
         "speed": "⚡⚡⚡⚡⚡ Blazing (~550 t/s)",
         "signup_url": "https://console.groq.com/keys",
-        "recommended_models": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]
+        "recommended_models": ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
     },
     {
         "id": "cerebras",

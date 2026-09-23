@@ -97,14 +97,14 @@ class Config:
         if self.model:
             if provider == "gemini" and "gemini" in self.model.lower():
                 return self.model
-            elif provider == "groq" and any(k in self.model.lower() for k in ("llama", "gemma", "mixtral")):
+            elif provider == "groq" and any(k in self.model.lower() for k in ("gpt-oss", "qwen", "llama", "gemma", "mixtral")):
                 return self.model
             elif provider not in ("gemini", "groq"):
                 return self.model
         if provider in ("gemini", "google"):
             return "gemini-flash-lite-latest"
         if provider == "groq":
-            return "llama-3.3-70b-versatile"
+            return "openai/gpt-oss-120b"
         if provider == "ollama":
             return "llama3.2:latest"
         if provider == "cerebras":
