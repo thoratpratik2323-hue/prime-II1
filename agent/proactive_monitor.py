@@ -99,8 +99,8 @@ class ProactiveMonitor:
         # 5. Code Monitor Agent (self-healing for crash logs)
         self._watch_code_crashes(current_time)
         
-        # 6. News/Daily Briefing Agent (Morning digest trigger)
-        self._check_morning_briefing()
+        # 6. News/Daily Briefing Agent (Disabled per user preference)
+        # self._check_morning_briefing()
         
         # 7. Predictive Actions Agent (Phase 4)
         try:

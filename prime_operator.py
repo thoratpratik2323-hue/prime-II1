@@ -123,7 +123,6 @@ class PrimeOperator:
                 self._check_system_vitals()
                 self._check_battery()
                 self._check_wellness_rest()
-                self._check_scheduled_briefing()
                 self._check_workspace_git()
                 self._check_downloads_classifier()
                 self._check_sleep_reflection()
@@ -175,26 +174,8 @@ class PrimeOperator:
             self._speak(msg)
 
     def _check_scheduled_briefing(self) -> None:
-        """Trigger morning briefing automatically between 08:30 and 09:30 once per day."""
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        if self._briefing_done_today == today_str:
-            return
-
-        now_dt = datetime.now()
-        # Between 8:30 AM and 9:30 AM
-        if (now_dt.hour == 8 and now_dt.minute >= 30) or (now_dt.hour == 9 and now_dt.minute <= 30):
-            self._briefing_done_today = today_str
-            msg = "Good morning Pratik! Proactive operator is preparing your daily briefing."
-            console.print(f"\n[bold bright_green]🌅 PROACTIVE SENTINEL:[/bold bright_green] [dim]{msg}[/dim]")
-            self._speak(msg)
-            if self.tool_executor:
-                try:
-                    res = self.tool_executor("morningBriefing", {"action": "briefing"})
-                    if res.get("ok"):
-                        briefing_text = str(res.get("result", ""))
-                        self._speak(briefing_text[:300])
-                except Exception:
-                    pass
+        """Scheduled morning briefing is disabled per operator preference."""
+        return
 
     def _check_workspace_git(self) -> None:
         """Remind operator about uncommitted git files at end of day (18:00 - 21:00)."""
