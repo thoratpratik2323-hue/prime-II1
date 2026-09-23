@@ -63,15 +63,15 @@ FREE_PROVIDERS: List[Dict[str, Any]] = [
         "name": "OpenRouter (Aggregator)",
         "env_var": "OPENROUTER_API_KEY",
         "base_url": "https://openrouter.ai/api/v1",
-        "default_model": "meta-llama/llama-3.3-70b-instruct:free",
+        "default_model": "nvidia/nemotron-3.5-lightning:free",
         "free_tier": "35+ permanently free models (:free suffix)",
         "credit_card": "NO",
         "speed": "⚡⚡⚡ Variable (~80 t/s)",
         "signup_url": "https://openrouter.ai/keys",
         "recommended_models": [
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "deepseek/deepseek-r1:free",
-            "qwen/qwen-2.5-coder-32b-instruct:free"
+            "nvidia/nemotron-3.5-lightning:free",
+            "qwen/qwen3.8-27b:free",
+            "nex-agi/nex-n2.5-pro:free"
         ]
     },
     {

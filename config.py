@@ -112,7 +112,7 @@ class Config:
         if provider == "github":
             return "gpt-4o"
         if provider == "openrouter":
-            return "meta-llama/llama-3.3-70b-instruct:free"
+            return "nvidia/nemotron-3.5-lightning:free"
         if provider == "mistral":
             return "codestral-latest"
         if provider == "deepseek":
