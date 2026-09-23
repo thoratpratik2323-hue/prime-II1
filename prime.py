@@ -565,11 +565,10 @@ def _ambient_voice_worker():
     mic_idx, mic_name = find_best_mic_index()
 
     r = sr.Recognizer()
-    r.dynamic_energy_threshold = True
-    r.dynamic_energy_adjustment_damping = 0.15
-    r.dynamic_energy_ratio = 1.5
-    r.pause_threshold = 0.8
-    r.non_speaking_duration = 0.4
+    r.dynamic_energy_threshold = False
+    r.energy_threshold = 220
+    r.pause_threshold = 0.6
+    r.non_speaking_duration = 0.3
 
     speaking_start_time = None
 
@@ -579,10 +578,10 @@ def _ambient_voice_worker():
             mode_desc = "Say 'Prime ...' to command" if req_ww else "Speak commands anytime, hands-free"
             console.print(f"  [bold bright_green]● WAKE WORD LISTENER LIVE[/bold bright_green] [dim]— {mode_desc}[/dim]\n")
             try:
-                r.adjust_for_ambient_noise(source, duration=0.8)
-                r.energy_threshold = max(r.energy_threshold, 400)
+                r.adjust_for_ambient_noise(source, duration=0.6)
+                r.energy_threshold = min(max(r.energy_threshold, 150), 350)
             except Exception:
-                pass
+                r.energy_threshold = 220
             while not _ambient_stop_event.is_set():
                 try:
                     # Echo prevention: pause listening when Prime is speaking out loud
@@ -607,22 +606,23 @@ def _ambient_voice_worker():
                     if voice.is_speaking or not voice.tts_queue.empty():
                         continue
 
-                    # Try local offline Faster-Whisper first for zero cloud latency
+                    # Try Google Web Speech with en-IN first (ultra-fast, understands Indian accents & Hinglish)
                     raw_text = None
                     try:
-                        from wake_word import wake_detector
-                        raw_text = wake_detector.whisper.transcribe_audio_data(audio)
+                        raw_text = r.recognize_google(audio, language="en-IN").strip()
                     except Exception:
-                        pass
+                        try:
+                            raw_text = r.recognize_google(audio, language="en-US").strip()
+                        except Exception:
+                            pass
 
+                    # Fallback to local Faster-Whisper if Google was offline or failed
                     if not raw_text:
                         try:
-                            raw_text = r.recognize_google(audio).strip()
-                        except sr.UnknownValueError:
-                            continue
-                        except sr.RequestError:
-                            time.sleep(1.0)
-                            continue
+                            from wake_word import wake_detector
+                            raw_text = wake_detector.whisper.transcribe_audio_data(audio)
+                        except Exception:
+                            pass
 
                     if not raw_text:
                         continue

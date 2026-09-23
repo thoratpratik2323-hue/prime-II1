@@ -40,11 +40,12 @@ console = Console()
 # Wake-Word enforcement: only respond when the user addresses 'Prime'.
 REQUIRE_WAKE_WORD = os.getenv("REQUIRE_WAKE_WORD", "true").lower() in ("true", "1", "yes")
 
-# Keywords that trigger Prime (strictly focused on Prime)
+# Keywords that trigger Prime (strictly focused on Prime + common variants)
 WAKE_WORDS = sorted(
     [
         'hey prime', 'okay prime', 'ok prime', 'hello prime',
-        'hi prime', 'suno prime', 'oye prime', 'ip prime', 'prime'
+        'hi prime', 'suno prime', 'oye prime', 'ip prime', 'bhai prime',
+        'prime', 'prem', 'jarvis', 'saturday', 'crime', 'pram'
     ],
     key=len, reverse=True
 )
@@ -163,16 +164,21 @@ def on_tool_result(name: str, result: dict):
 
 
 def find_best_mic_index() -> tuple[Optional[int], str]:
-    """Find the best active microphone on the system."""
-    mics = sr.Microphone.list_microphone_names()
-    # Prefer Realtek Microphone Array
+    """Find the best active microphone on the system, prioritizing active headsets or system default."""
+    try:
+        mics = sr.Microphone.list_microphone_names()
+    except Exception:
+        mics = []
+
+    # Check if a bluetooth headset or dedicated microphone is connected
     for idx, name in enumerate(mics):
-        if "microphone array" in name.lower() and "realtek" in name.lower():
+        name_lower = name.lower()
+        if any(h in name_lower for h in ("headset", "bluetooth", "airbass", "ptron", "wireless", "airlits", "hands-free")):
             return idx, name
 
-    # Fallback to default
-    default_name = mics[0] if mics else "Default Microphone"
-    return None, default_name
+    # Default to Windows System Default Recording Device (device_index=None)
+    default_name = mics[0] if mics else "System Default Microphone"
+    return None, f"System Default ({default_name})"
 
 
 def run_voice_loop():
@@ -186,11 +192,10 @@ def run_voice_loop():
     print_voice_header(mic_name)
 
     recognizer = sr.Recognizer()
-    recognizer.dynamic_energy_threshold = True
-    recognizer.dynamic_energy_adjustment_damping = 0.15
-    recognizer.dynamic_energy_ratio = 1.5
-    recognizer.pause_threshold = 0.8
-    recognizer.non_speaking_duration = 0.4
+    recognizer.dynamic_energy_threshold = False
+    recognizer.energy_threshold = 250
+    recognizer.pause_threshold = 0.6
+    recognizer.non_speaking_duration = 0.3
 
     # Dynamic personalized welcome announcement in Charon voice
     welcome_msg = get_dynamic_welcome_message()
@@ -203,10 +208,10 @@ def run_voice_loop():
     speaking_start_time = None
     with sr.Microphone(device_index=mic_idx) as source:
         try:
-            recognizer.adjust_for_ambient_noise(source, duration=0.8)
-            recognizer.energy_threshold = max(recognizer.energy_threshold, 400)
+            recognizer.adjust_for_ambient_noise(source, duration=0.6)
+            recognizer.energy_threshold = min(max(recognizer.energy_threshold, 150), 350)
         except Exception:
-            pass
+            recognizer.energy_threshold = 250
         while True:
             try:
                 # Barge-in support: if speaking, still check for interruption keywords
@@ -215,12 +220,13 @@ def run_voice_loop():
                         audio = recognizer.listen(source, timeout=2, phrase_time_limit=4)
                         text = None
                         try:
-                            from wake_word import wake_detector
-                            text = wake_detector.whisper.transcribe_audio_data(audio)
+                            text = recognizer.recognize_google(audio, language="en-IN").strip()
                         except Exception:
-                            pass
-                        if not text:
-                            text = recognizer.recognize_google(audio).strip()
+                            try:
+                                from wake_word import wake_detector
+                                text = wake_detector.whisper.transcribe_audio_data(audio)
+                            except Exception:
+                                pass
 
                         if text and any(w in text.lower() for w in ("stop", "quiet", "cancel", "chup", "ruko", "halt", "pause")):
                             voice.stop_speaking()
@@ -240,24 +246,23 @@ def run_voice_loop():
 
                 console.print("  [dim cyan]⚡ Sound detected... transcribing[/dim cyan]", end="\r")
 
-                # Try local offline Faster-Whisper first for zero cloud latency
+                # Try Google Web Speech with en-IN first for ultra-fast, accurate accented Hindi/English recognition
                 raw_text = None
                 try:
-                    from wake_word import wake_detector
-                    raw_text = wake_detector.whisper.transcribe_audio_data(audio)
+                    raw_text = recognizer.recognize_google(audio, language="en-IN").strip()
                 except Exception:
-                    pass
+                    try:
+                        raw_text = recognizer.recognize_google(audio, language="en-US").strip()
+                    except Exception:
+                        pass
 
+                # Fallback to local Faster-Whisper if Google fails or is offline
                 if not raw_text:
                     try:
-                        raw_text = recognizer.recognize_google(audio).strip()
-                    except sr.UnknownValueError:
-                        continue
-                    except sr.RequestError as e:
-                        console.print(f"[red]Speech recognition network error: {e}[/red]")
-                        time.sleep(1.0)
-                        continue
-
+                        from wake_word import wake_detector
+                        raw_text = wake_detector.whisper.transcribe_audio_data(audio)
+                    except Exception:
+                        pass
                 if not raw_text:
                     continue
 
