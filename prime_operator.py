@@ -125,6 +125,8 @@ class PrimeOperator:
                 self._check_wellness_rest()
                 self._check_scheduled_briefing()
                 self._check_workspace_git()
+                self._check_downloads_classifier()
+                self._check_sleep_reflection()
             except Exception as e:
                 # Never crash the operator thread
                 time.sleep(2)
@@ -221,6 +223,72 @@ class PrimeOperator:
             except Exception:
                 pass
 
+    def _check_downloads_classifier(self) -> None:
+        """SAT Sentinel: Organizes messy ~/Downloads into structured directories."""
+        now = time.time()
+        if getattr(self, "_last_downloads_check", 0) and now - self._last_downloads_check < 300:
+            return
+        self._last_downloads_check = now
+
+        downloads_dir = Path.home() / "Downloads"
+        if not downloads_dir.exists():
+            return
+
+        cat_map = {
+            "Documents": {".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls", ".txt", ".csv"},
+            "Code": {".py", ".js", ".ts", ".html", ".css", ".json", ".sql", ".zip", ".tar.gz", ".rar", ".7z"},
+            "Media": {".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp4", ".mkv", ".mp3", ".wav"},
+            "Installers": {".exe", ".msi"},
+        }
+
+        try:
+            organized_dir = downloads_dir / "Organized"
+            count = 0
+            for item in downloads_dir.iterdir():
+                if item.is_file() and not item.name.startswith((".", "crdownload", "tmp")):
+                    if now - item.stat().st_mtime < 60:
+                        continue
+                    ext = item.suffix.lower()
+                    target_cat = None
+                    for cat_name, extensions in cat_map.items():
+                        if ext in extensions:
+                            target_cat = cat_name
+                            break
+                    if target_cat:
+                        dest_folder = organized_dir / target_cat
+                        dest_folder.mkdir(parents=True, exist_ok=True)
+                        dest_path = dest_folder / item.name
+                        if not dest_path.exists():
+                            import shutil
+                            shutil.move(str(item), str(dest_path))
+                            count += 1
+            if count > 0:
+                console.print(f"[dim cyan]⚡ Downloads Sentinel: Auto-sorted {count} files in ~/Downloads into organized folders.[/dim cyan]")
+        except Exception:
+            pass
+
+    def _check_sleep_reflection(self) -> None:
+        """SAT Sentinel: Autonomous sleep reflection and app awareness when idle."""
+        now = time.time()
+        idle_sec = get_system_idle_seconds()
+        if idle_sec < 300:
+            return
+        if getattr(self, "_last_reflection_time", 0) and now - self._last_reflection_time < 900:
+            return
+        self._last_reflection_time = now
+
+        try:
+            import win32gui
+            hwnd = win32gui.GetForegroundWindow()
+            title = win32gui.GetWindowText(hwnd).strip() if hwnd else ""
+            if title and "prime" not in title.lower():
+                from memory.brain import store_fact
+                fact_str = f"Operator last focused on '{title}' before going idle at {datetime.now().strftime('%H:%M')}."
+                store_fact("pratik", "recent_context", fact_str, confidence=0.85)
+                console.print(f"[dim purple]🌙 Sleep Reflection: Consolidated idle context for \"{title}\".[/dim purple]")
+        except Exception:
+            pass
+
     def get_status(self) -> Dict[str, Any]:
         """Return live diagnostic status of proactive sentinels."""
         ram = psutil.virtual_memory()
@@ -240,6 +308,8 @@ class PrimeOperator:
                 "Wellness / Hydration Rest Sentinel",
                 "Morning Briefing Autonomous Trigger",
                 "Workspace Git Sentinel (End-of-day changes)",
+                "SAT Downloads Auto-Organizer Sentinel",
+                "SAT Sleep Reflection & App Awareness Sentinel",
             ]
         }
 

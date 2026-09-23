@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>PRIME AI — Autonomous Mobile Cockpit</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cyan: #00e5ff;
+      --cyan-dim: #00b8d4;
+      --amber: #ffab00;
+      --green: #00e676;
+      --red: #ff1744;
+      --purple: #7c4dff;
+      --bg: #020912;
+      --surface: rgba(0, 229, 255, 0.04);
+      --border: rgba(0, 229, 255, 0.15);
+      --text: #e0f7fa;
+      --text-dim: #546e7a;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+    }
+
+    /* Animated background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      animation: gridMove 20s linear infinite;
+      z-index: 0;
+    }
+    @keyframes gridMove {
+      0% { background-position: 0 0; }
+      100% { background-position: 40px 40px; }
+    }
+
+    /* Glow background */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(0,229,255,0.06) 0%, transparent 70%);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100vh;
+      padding: 24px 20px;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      width: 100%;
+    }
+    .header .logo {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(11px, 3vw, 13px);
+      font-weight: 700;
+      letter-spacing: 5px;
+      color: var(--cyan);
+      text-transform: uppercase;
+      opacity: 0.85;
+    }
+    .header .title {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(20px, 6vw, 26px);
+      font-weight: 900;
+      letter-spacing: 3px;
+      color: #fff;
+      margin-top: 4px;
+      text-shadow: 0 0 30px rgba(0,229,255,0.5);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+    .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    /* ── Orb Container ── */
+    .orb-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      width: 100%;
+      position: relative;
+    }
+
+    .orb {
+      width: clamp(160px, 45vw, 220px);
+      height: clamp(160px, 45vw, 220px);
+      border-radius: 50%;
+      position: relative;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .orb-core {
+      width: 60%; height: 60%;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, rgba(255,255,255,0.9), var(--cyan) 60%, rgba(0,184,212,0.8));
+      box-shadow:
+        0 0 30px var(--cyan),
+        0 0 60px rgba(0,229,255,0.4),
+        inset 0 0 20px rgba(255,255,255,0.5);
+      animation: orbFloat 4s ease-in-out infinite;
+    }
+
+    .orb-ring {
+      position: absolute;
+      inset: -12px;
+      border-radius: 50%;
+      border: 1.5px dashed rgba(0,229,255,0.4);
+      animation: ringRotate 15s linear infinite;
+    }
+    .orb-ring-2 {
+      position: absolute;
+      inset: -24px;
+      border-radius: 50%;
+      border: 1px dotted rgba(0,229,255,0.2);
+      animation: ringRotate 25s linear infinite reverse;
+    }
+
+    @keyframes orbFloat {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-8px) scale(1.02); }
+    }
+    @keyframes ringRotate {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Orb States */
+    .orb.listening .orb-core {
+      background: radial-gradient(circle at 35% 35%, #fff, var(--green) 60%, #00b0ff);
+      box-shadow: 0 0 40px var(--green), 0 0 80px rgba(0,230,118,0.5);
+      animation: orbListen 1s ease-in-out infinite alternate;
+    }
+    @keyframes orbListen {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.08); }
+    }
+
+    .orb.thinking .orb-core {
+      background: radial-gradient(circle at 35% 35%, #fff, var(--amber) 60%, #ff6d00);
+      box-shadow: 0 0 40px var(--amber), 0 0 80px rgba(255,171,0,0.5);
+      animation: orbThink 0.8s ease-in-out infinite alternate;
+    }
+    @keyframes orbThink {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      100% { transform: scale(1.05); opacity: 1; }
+    }
+
+    .orb.speaking .orb-core {
+      background: radial-gradient(circle at 35% 35%, #fff, var(--purple) 60%, var(--cyan));
+      box-shadow: 0 0 50px var(--purple), 0 0 100px rgba(124,77,255,0.6);
+      animation: orbSpeak 0.4s ease-in-out infinite alternate;
+    }
+    @keyframes orbSpeak {
+      0% { transform: scale(0.98); }
+      100% { transform: scale(1.12); }
+    }
+
+    /* State Label */
+    .state-label {
+      font-family: 'Orbitron', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: var(--cyan);
+      margin-top: 24px;
+      text-transform: uppercase;
+      min-height: 20px;
+      text-shadow: 0 0 15px var(--cyan);
+    }
+
+    /* Audio Waveform */
+    .waveform {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      height: 40px;
+      margin-top: 12px;
+    }
+    .bar {
+      width: 3px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--cyan);
+      transition: height 0.08s ease;
+      opacity: 0.7;
+    }
+
+    /* Transcript Box */
+    .transcript-box {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #cfd8dc;
+      max-height: 110px;
+      overflow-y: auto;
+      margin: 10px 0;
+      text-align: left;
+    }
+
+    /* Input Bar */
+    .input-bar {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      margin-bottom: 12px;
+    }
+    .input-field {
+      flex: 1;
+      background: rgba(0, 229, 255, 0.05);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+    .input-field:focus {
+      border-color: var(--cyan);
+    }
+    .btn-send {
+      background: var(--cyan);
+      color: #020912;
+      border: none;
+      border-radius: 8px;
+      padding: 0 16px;
+      font-family: 'Orbitron', monospace;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* ── Controls ── */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .btn-connect {
+      width: 100%;
+      padding: 14px 24px;
+      border-radius: 12px;
+      border: 1px solid var(--cyan);
+      background: linear-gradient(135deg, rgba(0,229,255,0.15), rgba(0,184,212,0.05));
+      color: var(--cyan);
+      font-family: 'Orbitron', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 0 20px rgba(0,229,255,0.2);
+    }
+    .btn-connect:active {
+      transform: scale(0.98);
+    }
+    .btn-connect.active {
+      border-color: var(--red);
+      color: var(--red);
+      box-shadow: 0 0 20px rgba(255,23,68,0.3);
+    }
+
+    .footer {
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">⚡ S.A.T.U.R.D.A.Y & PRIME CORE</div>
+    <div class="title">MOBILE COCKPIT</div>
+    <div class="status-badge">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">NEURAL LINK READY</span>
+    </div>
+  </div>
+
+  <!-- Orb -->
+  <div class="orb-container">
+    <div class="orb" id="orb" onclick="toggleVoiceInput()">
+      <div class="orb-ring"></div>
+      <div class="orb-ring-2"></div>
+      <div class="orb-core"></div>
+    </div>
+    <div class="state-label" id="stateLabel">TAP ORB TO SPEAK</div>
+
+    <!-- Waveform -->
+    <div class="waveform" id="waveform">
+      <!-- 24 visualizer bars -->
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+      <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+    </div>
+  </div>
+
+  <!-- Transcript & Controls -->
+  <div class="controls">
+    <div class="transcript-box" id="transcriptBox">
+      <span style="color: #00e5ff;">Prime:</span> "Welcome back, Pratik! Cockpit is listening. Speak into your mic or type a command below."
+    </div>
+
+    <div class="input-bar">
+      <input type="text" id="cmdInput" class="input-field" placeholder="Type command to execute on PC..." onkeydown="if(event.key==='Enter') sendTextCommand()" />
+      <button class="btn-send" onclick="sendTextCommand()">RUN</button>
+    </div>
+
+    <button class="btn-connect" id="btnConnect" onclick="toggleVoiceInput()">🎙️ START VOICE LINK</button>
+    <div class="footer">PRIME AI · BUILT FOR PRATIK THORAT · ZERO GUI</div>
+  </div>
+</div>
+
+<script>
+  let isListening = false;
+  let recognition = null;
+  const orb = document.getElementById('orb');
+  const stateLabel = document.getElementById('stateLabel');
+  const btnConnect = document.getElementById('btnConnect');
+  const transcriptBox = document.getElementById('transcriptBox');
+  const bars = document.querySelectorAll('.bar');
+
+  // Check Web Speech Recognition in browser
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  function setVisualState(state, text) {
+    orb.className = 'orb ' + state;
+    stateLabel.textContent = text;
+  }
+
+  function appendLog(sender, message, isError = false) {
+    const color = isError ? '#ff1744' : (sender === 'You' ? '#00e676' : '#00e5ff');
+    const p = document.createElement('div');
+    p.style.marginBottom = '6px';
+    p.innerHTML = `<span style="color: ${color}; font-weight: bold;">${sender}:</span> ${message}`;
+    transcriptBox.appendChild(p);
+    transcriptBox.scrollTop = transcriptBox.scrollHeight;
+  }
+
+  function simulateWaveform(active) {
+    if (!active) {
+      bars.forEach(b => b.style.height = '4px');
+      return;
+    }
+    bars.forEach(b => {
+      const h = Math.floor(Math.random() * 32) + 6;
+      b.style.height = h + 'px';
+    });
+  }
+
+  let waveInterval = null;
+  function startWave() {
+    if (!waveInterval) waveInterval = setInterval(() => simulateWaveform(true), 80);
+  }
+  function stopWave() {
+    if (waveInterval) { clearInterval(waveInterval); waveInterval = null; }
+    simulateWaveform(false);
+  }
+
+  // Text Command
+  async function sendTextCommand() {
+    const inp = document.getElementById('cmdInput');
+    const txt = inp.value.trim();
+    if (!txt) return;
+    inp.value = '';
+    appendLog('You', txt);
+    await executeOnPC(txt);
+  }
+
+  // Voice Input via mobile browser
+  function toggleVoiceInput() {
+    if (isListening) {
+      stopVoice();
+    } else {
+      startVoice();
+    }
+  }
+
+  function startVoice() {
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported on this browser. Please type commands below or use Chrome/Safari!');
+      return;
+    }
+    try {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.continuous = false;
+
+      recognition.onstart = () => {
+        isListening = true;
+        setVisualState('listening', 'LISTENING...');
+        btnConnect.textContent = '⏹️ STOP LISTENING';
+        btnConnect.className = 'btn-connect active';
+        startWave();
+      };
+
+      recognition.onresult = async (e) => {
+        const spoken = e.results[0][0].transcript;
+        appendLog('You', spoken);
+        stopVoice();
+        await executeOnPC(spoken);
+      };
+
+      recognition.onerror = (e) => {
+        console.error('Speech error:', e);
+        stopVoice();
+      };
+
+      recognition.onend = () => {
+        if (isListening) stopVoice();
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.error(err);
+      stopVoice();
+    }
+  }
+
+  function stopVoice() {
+    isListening = false;
+    stopWave();
+    setVisualState('', 'TAP ORB TO SPEAK');
+    btnConnect.textContent = '🎙️ START VOICE LINK';
+    btnConnect.className = 'btn-connect';
+    if (recognition) {
+      try { recognition.stop(); } catch(e) {}
+      recognition = null;
+    }
+  }
+
+  // Send command to Prime PC Server
+  async function executeOnPC(commandText) {
+    setVisualState('thinking', 'PROCESSING ON PC...');
+    startWave();
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: commandText })
+      });
+      const data = await res.json();
+      stopWave();
+
+      if (data.ok) {
+        appendLog('Prime', data.reply);
+        speakResponse(data.reply);
+      } else {
+        appendLog('Prime Error', data.error || 'Execution failed', true);
+        setVisualState('', 'TAP ORB TO SPEAK');
+      }
+    } catch (err) {
+      stopWave();
+      appendLog('Network Error', 'Could not connect to PC server: ' + err.message, true);
+      setVisualState('', 'TAP ORB TO SPEAK');
+    }
+  }
+
+  // Voice speech synthesis on phone
+  function speakResponse(text) {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setVisualState('speaking', 'PRIME SPEAKING...');
+      startWave();
+      const clean = text.replace(/[*_#`]/g, '');
+      const utt = new SpeechSynthesisUtterance(clean);
+      utt.rate = 1.05;
+      utt.pitch = 0.95;
+      utt.onend = () => {
+        stopWave();
+        setVisualState('', 'TAP ORB TO SPEAK');
+      };
+      utt.onerror = () => {
+        stopWave();
+        setVisualState('', 'TAP ORB TO SPEAK');
+      };
+      window.speechSynthesis.speak(utt);
+    } else {
+      setVisualState('', 'TAP ORB TO SPEAK');
+    }
+  }
+</script>
+</body>
+</html>
