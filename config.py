@@ -108,7 +108,7 @@ class Config:
         if provider == "ollama":
             return "llama3.2:latest"
         if provider == "cerebras":
-            return "llama3.3-70b"
+            return "qwen-3.8-27b"
         if provider == "github":
             return "gpt-4o"
         if provider == "openrouter":

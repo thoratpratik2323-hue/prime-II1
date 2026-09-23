@@ -39,12 +39,12 @@ FREE_PROVIDERS: List[Dict[str, Any]] = [
         "name": "Cerebras AI (World's Fastest Inference)",
         "env_var": "CEREBRAS_API_KEY",
         "base_url": "https://api.cerebras.ai/v1",
-        "default_model": "llama3.3-70b",
+        "default_model": "qwen-3.8-27b",
         "free_tier": "30 RPM, 1M tokens/day, 2000 tokens/sec",
         "credit_card": "NO",
         "speed": "⚡⚡⚡⚡⚡ Ludicrous Speed (~2100 t/s)",
         "signup_url": "https://cloud.cerebras.ai/",
-        "recommended_models": ["llama3.3-70b", "llama3.1-8b"]
+        "recommended_models": ["qwen-3.8-27b", "gpt-oss-120b"]
     },
     {
         "id": "github",
