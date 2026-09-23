@@ -698,11 +698,13 @@ def get_prompt_text() -> str:
 
 
 def main():
-    from single_instance import acquire_single_instance
+    from single_instance import acquire_single_instance, prevent_system_sleep
     if not acquire_single_instance():
         console.print("[bold yellow]⚠ Prime AI is already running in background.[/bold yellow]")
         console.print("[dim]Another instance is active. Exiting duplicate instance to prevent double-voice echo.[/dim]\n")
         sys.exit(0)
+
+    prevent_system_sleep(True)
 
     print_banner()
     start_ambient_mic()

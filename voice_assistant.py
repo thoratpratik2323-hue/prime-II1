@@ -182,11 +182,13 @@ def find_best_mic_index() -> tuple[Optional[int], str]:
 
 
 def run_voice_loop():
-    from single_instance import acquire_single_instance
+    from single_instance import acquire_single_instance, prevent_system_sleep
     if not acquire_single_instance():
         console.print("[bold yellow]⚠ Prime AI is already active in another window or background process.[/bold yellow]")
         console.print("[dim]Exiting duplicate instance to avoid audio echo and mic capture conflicts.[/dim]\n")
         return
+
+    prevent_system_sleep(True)
 
     mic_idx, mic_name = find_best_mic_index()
     print_voice_header(mic_name)

@@ -46,3 +46,27 @@ def release_single_instance() -> None:
         except Exception:
             pass
         _MUTEX_HANDLE = None
+
+
+def prevent_system_sleep(enable: bool = True) -> bool:
+    """
+    Prevents Windows from entering sleep or suspending background processes
+    while Prime AI is running. Keeps the CPU, network, audio, and background tasks
+    awake 24/7 without forcing the monitor to stay lit.
+    """
+    if sys.platform != "win32":
+        return True
+    try:
+        import ctypes
+        ES_CONTINUOUS = 0x80000000
+        ES_SYSTEM_REQUIRED = 0x00000001
+        ES_AWAYMODE_REQUIRED = 0x00000040
+        if enable:
+            ctypes.windll.kernel32.SetThreadExecutionState(
+                ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED
+            )
+        else:
+            ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+        return True
+    except Exception:
+        return False
