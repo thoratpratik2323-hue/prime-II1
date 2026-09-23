@@ -100,7 +100,7 @@ def enable_auto_start(args: Dict[str, Any] | None = None) -> Dict[str, Any]:
     vbs_path = _launcher_vbs_path()
     command = f'wscript.exe "{vbs_path}"'
 
-    # 1. Registry HKCU Run Key
+    # 1. Registry HKCU Run Key (Standard Windows auto-start)
     try:
         import winreg
         with _open_run_key(write=True) as key:
@@ -108,20 +108,20 @@ def enable_auto_start(args: Dict[str, Any] | None = None) -> Dict[str, Any]:
     except Exception as e:
         raise ToolError(f"Could not write startup registry entry: {e}") from e
 
-    # 2. Windows User Startup Folder Shortcut
+    # 2. Clean up any legacy Startup folder entry to prevent duplicate instances
     startup_vbs = _startup_vbs_path()
     try:
-        if os.path.isdir(_startup_folder()):
-            shutil.copy2(vbs_path, startup_vbs)
+        if os.path.isfile(startup_vbs):
+            os.remove(startup_vbs)
     except Exception:
         pass
 
     return {
-        "result": "Prime AI auto-start ENABLED. Prime will start automatically whenever your PC boots up with 24/7 mic active.",
+        "result": "Prime AI auto-start ENABLED via Registry Run key. Prime will start automatically whenever your PC boots up with 24/7 mic active.",
         "enabled": True,
         "launcher": vbs_path,
         "registry_key": f"HKCU\\{RUN_KEY_PATH}\\{VALUE_NAME}",
-        "startup_folder_entry": startup_vbs if os.path.exists(startup_vbs) else None,
+        "startup_folder_entry": None,
     }
 
 

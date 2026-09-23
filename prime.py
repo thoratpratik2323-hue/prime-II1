@@ -607,13 +607,22 @@ def _ambient_voice_worker():
                     if voice.is_speaking or not voice.tts_queue.empty():
                         continue
 
+                    # Try local offline Faster-Whisper first for zero cloud latency
+                    raw_text = None
                     try:
-                        raw_text = r.recognize_google(audio).strip()
-                    except sr.UnknownValueError:
-                        continue
-                    except sr.RequestError:
-                        time.sleep(1.0)
-                        continue
+                        from wake_word import wake_detector
+                        raw_text = wake_detector.whisper.transcribe_audio_data(audio)
+                    except Exception:
+                        pass
+
+                    if not raw_text:
+                        try:
+                            raw_text = r.recognize_google(audio).strip()
+                        except sr.UnknownValueError:
+                            continue
+                        except sr.RequestError:
+                            time.sleep(1.0)
+                            continue
 
                     if not raw_text:
                         continue
@@ -689,6 +698,12 @@ def get_prompt_text() -> str:
 
 
 def main():
+    from single_instance import acquire_single_instance
+    if not acquire_single_instance():
+        console.print("[bold yellow]⚠ Prime AI is already running in background.[/bold yellow]")
+        console.print("[dim]Another instance is active. Exiting duplicate instance to prevent double-voice echo.[/dim]\n")
+        sys.exit(0)
+
     print_banner()
     start_ambient_mic()
     try:
