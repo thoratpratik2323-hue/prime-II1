@@ -547,6 +547,141 @@ TOOL_SPECS: List[Dict[str, Any]] = [
             }
         }
     },
+    # Universal OS & GUI Automation (V3)
+    {
+        "name": "mouseClick",
+        "description": "Click the mouse at specific (x, y) screen coordinates or current position. Supports left, right, middle, and double click.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "x": {"type": "integer", "description": "Optional X coordinate on screen."},
+                "y": {"type": "integer", "description": "Optional Y coordinate on screen."},
+                "button": {"type": "string", "description": "'left', 'right', or 'middle'. Defaults to 'left'."},
+                "clicks": {"type": "integer", "description": "Number of clicks: 1 for single click, 2 for double click. Defaults to 1."}
+            }
+        }
+    },
+    {
+        "name": "mouseMove",
+        "description": "Move the mouse cursor smoothly to specific (x, y) coordinates.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "x": {"type": "integer", "description": "Target X screen coordinate."},
+                "y": {"type": "integer", "description": "Target Y screen coordinate."},
+                "duration": {"type": "number", "description": "Animation duration in seconds. Defaults to 0.2."}
+            },
+            "required": ["x", "y"]
+        }
+    },
+    {
+        "name": "mouseScroll",
+        "description": "Scroll the mouse wheel at the current cursor position. Positive to scroll up, negative to scroll down.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "amount": {"type": "integer", "description": "Amount to scroll (e.g. -300 to scroll down, 300 to scroll up)."}
+            },
+            "required": ["amount"]
+        }
+    },
+    {
+        "name": "typeText",
+        "description": "Type or paste text into the active window or input field. Supports multilingual text, emojis, and code.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The exact text to type into the active field or window."},
+                "press_enter": {"type": "boolean", "description": "Whether to press Enter after typing. Defaults to false."}
+            },
+            "required": ["text"]
+        }
+    },
+    {
+        "name": "pressHotkey",
+        "description": "Press keyboard hotkeys or shortcut combinations (e.g. ['ctrl', 'c'], ['alt', 'tab'], ['win', 'd'], 'enter', 'esc').",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "keys": {
+                    "description": "Single key or list of keys to press together (e.g. ['ctrl', 'c'] or 'enter' or 'ctrl+shift+esc')."
+                }
+            },
+            "required": ["keys"]
+        }
+    },
+    {
+        "name": "getCursorPosition",
+        "description": "Get current mouse cursor position (x, y) and screen dimensions.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "listOpenWindows",
+        "description": "List all open application windows on the desktop with titles, process IDs, and coordinates.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "focusWindow",
+        "description": "Bring an open application window to the foreground by matching its title or name (e.g. 'Chrome', 'Visual Studio Code', 'Discord', 'Notepad').",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Partial title or process name to match and focus."}
+            },
+            "required": ["query"]
+        }
+    },
+    # Universal Shell & System Control (V3)
+    {
+        "name": "executePowerShell",
+        "description": "Execute any PowerShell command or script on Windows. Enables package installation (winget, pip, npm), registry edits, system settings, file manipulation, and network queries.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "The exact PowerShell command or script block to run."},
+                "timeout": {"type": "integer", "description": "Execution timeout in seconds. Defaults to 45."}
+            },
+            "required": ["command"]
+        }
+    },
+    {
+        "name": "openPath",
+        "description": "Open any file, folder, document, video, or URL using its default Windows application (os.startfile).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "File or folder path to open (e.g. 'C:\\Users\\user\\Documents\\file.pdf')."}
+            },
+            "required": ["path"]
+        }
+    },
+    {
+        "name": "listDrives",
+        "description": "List all physical and logical disk drives on Windows with storage capacity, free space, and usage percentage.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "manageProcess",
+        "description": "Inspect or terminate running processes by name or PID.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Process name to match (e.g. 'chrome.exe', 'notepad.exe')."},
+                "pid": {"type": "integer", "description": "Process ID to terminate."},
+                "action": {"type": "string", "description": "'kill' (default) or 'info'."}
+            }
+        }
+    },
+    {
+        "name": "analyzeScreenWithAI",
+        "description": "Take a live screenshot and analyze it with Gemini Multimodal Vision. Identifies open apps, reads error dialogues, locates UI buttons, inspects code, or answers questions about what is on screen.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "Question or instruction for analyzing the screen (e.g. 'What error is showing on screen?' or 'Find the coordinates of the submit button')."}
+            }
+        }
+    },
 ]
 
 

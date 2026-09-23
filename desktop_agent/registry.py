@@ -142,6 +142,21 @@ DESKTOP_TOOL_NAMES = [
     "enableAutoStart",
     "disableAutoStart",
     "getAutoStartStatus",
+    # Universal OS & GUI Automation (V3)
+    "mouseClick",
+    "mouseMove",
+    "mouseScroll",
+    "typeText",
+    "pressHotkey",
+    "getCursorPosition",
+    "listOpenWindows",
+    "focusWindow",
+    # Universal Shell & System Dominance (V3)
+    "executePowerShell",
+    "openPath",
+    "listDrives",
+    "manageProcess",
+    "analyzeScreenWithAI",
 ]
 
 
@@ -163,6 +178,8 @@ _MODULE_NAMES = [
     "tools_coding",
     "tools_system",
     "tools_startup",
+    "tools_gui",
+    "tools_shell",
 ]
 
 

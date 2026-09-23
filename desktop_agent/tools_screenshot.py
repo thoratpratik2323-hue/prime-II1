@@ -215,7 +215,6 @@ def read_screen(args: Dict[str, Any]) -> Dict[str, Any]:
         img = _capture()
     try:
         text = _run_ocr(img)
-        visible = _trim_ocr(text, int(args.get("max_chars", 1500))) or "(no readable text)"
     except ToolError as e:
         return {
             "result": f"Active window: {title or 'unknown'}. OCR unavailable: {e.message}",
@@ -228,9 +227,74 @@ def read_screen(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+@register("analyzeScreenWithAI")
+def analyze_screen_with_ai(args: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """
+    Take a live screenshot and analyze it with Gemini Multimodal Vision.
+    Can answer questions about what is on screen, read error dialogues, inspect code,
+    find buttons to click, or describe open applications.
+    Args:
+        prompt (str, optional): Specific question or instruction for analyzing the screen.
+            Default: "Describe what is currently visible on the screen, identify any open applications, and locate key UI elements or errors."
+    """
+    args = args or {}
+    user_prompt = args.get("prompt", "Describe what is on screen, identify active apps, and locate key buttons or errors.")
+
+    try:
+        img = _capture()
+    except ToolError as e:
+        return {"result": f"Could not capture screen: {e.message}"}
+
+    # Compress to JPEG buffer
+    try:
+        from io import BytesIO
+        buf = BytesIO()
+        # Resize if very large for faster upload
+        w, h = img.size
+        if w > 1920:
+            scale = 1920 / w
+            img = img.resize((int(w * scale), int(h * scale)))
+        img.convert("RGB").save(buf, format="JPEG", quality=75)
+        img_bytes = buf.getvalue()
+    except Exception as e:
+        return {"result": f"Failed to prepare screen image buffer: {e}"}
+
+    # Attempt Gemini Vision analysis
+    try:
+        from config import config
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=config.gemini_api_key)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                user_prompt,
+                types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+            ],
+        )
+        return {
+            "result": f"Screen Vision Analysis:\n{response.text}",
+            "analysis": response.text,
+            "dimensions": f"{img.size[0]}x{img.size[1]}",
+        }
+    except Exception as e:
+        # Fallback to OCR if vision fails
+        try:
+            ocr_text = _run_ocr(img)
+            return {
+                "result": f"Vision API unavailable ({e}). Extracted OCR text:\n{_trim_ocr(ocr_text, 1200)}",
+                "ocr_fallback": True,
+            }
+        except Exception:
+            return {"result": f"Screen captured but vision analysis encountered an error: {e}"}
+
+
 __all__ = [
     "take_screenshot",
     "save_screenshot",
     "analyze_screenshot",
     "read_screen",
+    "analyze_screen_with_ai",
 ]
+
