@@ -747,6 +747,17 @@ TOOL_SPECS: List[Dict[str, Any]] = [
             }
         }
     },
+    {
+        "name": "importWhatsAppContacts",
+        "description": "Import contacts in bulk from a .vcf (vCard) file into the WhatsApp address book.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "vcf_path": {"type": "string", "description": "Absolute path to the contacts.vcf file."}
+            },
+            "required": ["vcf_path"]
+        }
+    },
 ]
 
 
@@ -987,6 +998,17 @@ def _handle_read_whatsapp_chats(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"Failed to read WhatsApp chats: {e}"}
 
 
+def _handle_import_whatsapp_contacts(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import import_vcf_contacts
+        path = str(args.get("vcf_path") or args.get("path") or "").strip()
+        if not path:
+            return {"ok": False, "error": "'vcf_path' parameter is required."}
+        return import_vcf_contacts(path)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to import contacts: {e}"}
+
+
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
     "getTime": _handle_time,
@@ -1018,6 +1040,7 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "listWhatsAppContacts": _handle_list_whatsapp_contacts,
     "setupWhatsAppWeb": _handle_setup_whatsapp_web,
     "readWhatsAppChats": _handle_read_whatsapp_chats,
+    "importWhatsAppContacts": _handle_import_whatsapp_contacts,
 }
 
 

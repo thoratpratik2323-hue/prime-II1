@@ -89,6 +89,48 @@ def list_contacts() -> Dict[str, Any]:
     }
 
 
+def import_vcf_contacts(vcf_path: str) -> Dict[str, Any]:
+    """Import contacts from a .vcf (vCard) address book file."""
+    p = Path(vcf_path).resolve()
+    if not p.exists():
+        return {"ok": False, "error": f"VCF file not found at: {vcf_path}"}
+
+    contacts = load_contacts()
+    imported_count = 0
+    current_name = None
+    current_numbers = []
+
+    try:
+        with open(p, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("BEGIN:VCARD"):
+                    current_name = None
+                    current_numbers = []
+                elif line.startswith("FN:"):
+                    current_name = line[3:].strip()
+                elif line.startswith("TEL"):
+                    parts = line.split(":", 1)
+                    if len(parts) == 2:
+                        norm = normalize_phone_number(parts[1].strip())
+                        if norm:
+                            current_numbers.append(norm)
+                elif line.startswith("END:VCARD"):
+                    if current_name and current_numbers:
+                        contacts[current_name.lower().strip()] = current_numbers[0]
+                        imported_count += 1
+
+        CONTACTS_FILE.write_text(json.dumps(contacts, indent=2), encoding="utf-8")
+        return {
+            "ok": True,
+            "message": f"Successfully imported {imported_count} contacts from {p.name}.",
+            "total_contacts": len(contacts)
+        }
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to import VCF: {e}"}
+
+
+
 def normalize_phone_number(raw: str) -> str:
     """Normalize input into an international phone string (defaulting to +91 for 10-digit Indian numbers)."""
     digits_only = re.sub(r"[^\d+]", "", raw.strip())
