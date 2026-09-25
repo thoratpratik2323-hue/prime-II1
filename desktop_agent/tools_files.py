@@ -51,20 +51,34 @@ FOLDER_ALIASES: Dict[str, Path] = {
 }
 
 
+def _normalize_user_path(raw_path: str) -> Path:
+    s = str(raw_path).strip()
+    parts = Path(s).parts
+    # Rebase hallucinated usernames (e.g. C:\Users\pratik\...) to actual HOME (C:\Users\thora\...)
+    if len(parts) >= 3 and parts[1].lower() == "users" and parts[2].lower() in ("pratik", "prati", "msi", "admin", "user"):
+        remainder = Path(*parts[3:]) if len(parts) > 3 else Path()
+        return (HOME / remainder).resolve()
+
+    # Rebase common top-level user directories to actual HOME
+    if parts and parts[0].lower() in ("desktop", "documents", "downloads", "pictures", "music", "videos"):
+        return (HOME / Path(*parts)).resolve()
+
+    return Path(os.path.expandvars(os.path.expanduser(s))).resolve()
+
+
 def _resolve_folder(name_or_path: Optional[str]) -> Path:
     if not name_or_path:
         raise ToolError("Parameter 'name' or 'path' is required.")
     key = str(name_or_path).strip().lower()
     if key in FOLDER_ALIASES:
         return FOLDER_ALIASES[key]
-    p = Path(os.path.expandvars(os.path.expanduser(str(name_or_path)))).resolve()
-    return p
+    return _normalize_user_path(name_or_path)
 
 
 def _resolve_file(path: Optional[str], *, must_exist: bool = False) -> Path:
     if not path:
         raise ToolError("Parameter 'path' is required.")
-    p = Path(os.path.expandvars(os.path.expanduser(str(path)))).resolve()
+    p = _normalize_user_path(path)
     if must_exist and not p.exists():
         raise ToolError(f"File does not exist: {p}")
     return p
@@ -73,16 +87,16 @@ def _resolve_file(path: Optional[str], *, must_exist: bool = False) -> Path:
 def _ensure_safe(p: Path, allow_anywhere: bool = False) -> None:
     if allow_anywhere:
         return
-    real = str(p)
+    real = str(p.resolve()).lower()
     for root in SAFE_ROOTS:
         try:
-            root_real = str(root.resolve())
+            root_real = str(root.resolve()).lower()
         except Exception:
             continue
-        if real == root_real or real.startswith(root_real + os.sep):
+        if real == root_real or real.startswith(root_real + os.sep) or real.startswith(root_real + "/"):
             return
     raise ToolError(
-        f"Path '{p}' is outside MYRAA's safe folders (Desktop, Documents, "
+        f"Path '{p}' is outside Prime's safe folders (Desktop, Documents, "
         f"Downloads, Pictures, Music, Videos, home, and the project folder). "
         f"Pass allow_anywhere=true only if you really mean it."
     )
