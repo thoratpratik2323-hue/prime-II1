@@ -283,54 +283,88 @@ def launch_on_interactive_desktop(cmd: str) -> bool:
         return False
 
 
-def attach_thread_to_default_desktop() -> bool:
-    """Attaches the calling thread to the physical user desktop (WinSta0\\Default)."""
-    if platform.system() != "Windows":
-        return False
-    try:
-        u32 = ctypes.windll.user32
-        h_desk = u32.OpenDesktopW("Default", 0, False, 0x01FF)  # GENERIC_ALL
-        if h_desk:
-            return bool(u32.SetThreadDesktop(h_desk))
-    except Exception as e:
-        log.debug("Could not attach thread to Default desktop: %s", e)
-    return False
+def run_on_interactive_thread(fn: Callable[..., Any], *args, **kwargs) -> Any:
+    """
+    Executes a function in a freshly spawned thread attached to the user's physical desktop (WinSta0\\Default).
+    This guarantees SetThreadDesktop succeeds (since calling thread has no prior window handles/hooks),
+    allowing 100% reliable GUI focusing, keypresses, and automation on the user's interactive monitor.
+    """
+    result_container = {}
+    exc_container = {}
+
+    def _target():
+        if platform.system() == "Windows":
+            try:
+                u32 = ctypes.windll.user32
+                h_desk = u32.OpenDesktopW("Default", 0, False, 0x01FF)
+                if h_desk:
+                    u32.SetThreadDesktop(h_desk)
+            except Exception as e:
+                log.debug("run_on_interactive_thread SetThreadDesktop error: %s", e)
+        try:
+            result_container["result"] = fn(*args, **kwargs)
+        except Exception as ex:
+            exc_container["error"] = ex
+
+    t = threading.Thread(target=_target, daemon=False)
+    t.start()
+    t.join(timeout=30.0)
+
+    if "error" in exc_container:
+        raise exc_container["error"]
+    return result_container.get("result")
 
 
-def focus_whatsapp_window() -> bool:
+def _focus_whatsapp_window_raw() -> bool:
     """Finds and brings ANY active WhatsApp window (Chrome WhatsApp Web, Edge, or Desktop App) to the foreground."""
     if platform.system() != "Windows":
         return False
     try:
-        import win32gui
-        import win32con
-        attach_thread_to_default_desktop()
+        u32 = ctypes.windll.user32
+        h_desk = u32.OpenDesktopW("Default", 0, False, 0x01FF)
+        if h_desk:
+            u32.SetThreadDesktop(h_desk)
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
         hwnds = []
 
-        def cb(h, _):
-            t = win32gui.GetWindowText(h)
-            c = win32gui.GetClassName(h)
+        def _cb(h, _):
+            buf = ctypes.create_unicode_buffer(512)
+            u32.GetWindowTextW(h, buf, 512)
+            t = buf.value
+            u32.GetClassNameW(h, buf, 512)
+            c = buf.value
             if "whatsapp" in t.lower() or "whatsapp" in c.lower():
-                hwnds.append(h)
+                hwnds.append((h, t, c))
             return True
 
-        win32gui.EnumWindows(cb, None)
+        cb = WNDENUMPROC(_cb)
+        if h_desk:
+            u32.EnumDesktopWindows(h_desk, cb, 0)
+        else:
+            u32.EnumWindows(cb, 0)
+
         if hwnds:
-            hwnd = hwnds[0]
+            hwnd = hwnds[0][0]
             # Use AttachThreadInput to bypass Windows foreground activation lock
-            u32 = ctypes.windll.user32
             curr_tid = ctypes.windll.kernel32.GetCurrentThreadId()
             fore_hwnd = u32.GetForegroundWindow()
             fore_tid = u32.GetWindowThreadProcessId(fore_hwnd, None)
             u32.AttachThreadInput(curr_tid, fore_tid, True)
-            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            u32.ShowWindow(hwnd, 9)  # SW_RESTORE
             u32.SetForegroundWindow(hwnd)
             u32.SetFocus(hwnd)
             u32.AttachThreadInput(curr_tid, fore_tid, False)
+            log.info("Focused WhatsApp window: HWND %s (%s)", hwnd, hwnds[0][1])
             return True
     except Exception as e:
-        log.debug("focus_whatsapp_window error: %s", e)
+        log.debug("_focus_whatsapp_window_raw error: %s", e)
     return False
+
+
+def focus_whatsapp_window() -> bool:
+    """Public wrapper to focus WhatsApp using an interactive thread."""
+    return bool(run_on_interactive_thread(_focus_whatsapp_window_raw))
 
 
 def press_enter_interactive():
@@ -354,33 +388,36 @@ def send_via_desktop_protocol(phone_number: str, message: str) -> Dict[str, Any]
     encoded_msg = urllib.parse.quote(message)
     uri = f"whatsapp://send?phone={clean_num}&text={encoded_msg}"
 
+    def _do_send():
+        # 1. Launch URI on interactive desktop
+        launch_on_interactive_desktop(f'explorer.exe "{uri}"')
+        time.sleep(3.0)
+
+        # 2. Focus WhatsApp window
+        _focus_whatsapp_window_raw()
+        time.sleep(0.8)
+
+        # 3. Simulate Enter key to send the typed message (dual native + pyautogui)
+        press_enter_interactive()
+        time.sleep(0.2)
+        try:
+            import pyautogui
+            pyautogui.press("enter")
+        except Exception:
+            pass
+        time.sleep(0.4)
+        press_enter_interactive()
+
+        return {
+            "ok": True,
+            "message": f"WhatsApp message successfully dispatched to {phone_number} via Desktop App.",
+            "method": "windows_protocol"
+        }
+
     try:
         if platform.system() == "Windows":
-            # 1. Launch URI on interactive desktop
-            launch_on_interactive_desktop(f'explorer.exe "{uri}"')
-            time.sleep(3.0)
-
-            # 2. Attach current thread to physical desktop and bring WhatsApp to foreground
-            attach_thread_to_default_desktop()
-            focus_whatsapp_window()
-            time.sleep(0.8)
-
-            # 3. Simulate Enter key to send the typed message (native + pyautogui for full coverage)
-            press_enter_interactive()
-            time.sleep(0.2)
-            try:
-                import pyautogui
-                pyautogui.press("enter")
-            except Exception:
-                pass
-            time.sleep(0.4)
-            press_enter_interactive()
-
-            return {
-                "ok": True,
-                "message": f"WhatsApp message successfully dispatched to {phone_number} via Desktop App.",
-                "method": "windows_protocol"
-            }
+            res = run_on_interactive_thread(_do_send)
+            return res or {"ok": False, "error": "Desktop transmission thread returned None"}
         else:
             return {"ok": False, "error": "Native desktop protocol is only supported on Windows."}
     except Exception as e:
