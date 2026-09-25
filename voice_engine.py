@@ -36,10 +36,31 @@ MARK_LIV_GEMINI_VOICES: Dict[str, str] = {
 }
 
 EDGE_NEURAL_VOICES: Dict[str, str] = {
+    "madhur": "hi-IN-MadhurNeural",          # Native Hindi male (flawless Hindi & English)
+    "swara": "hi-IN-SwaraNeural",            # Native Hindi female
+    "prabhat": "en-IN-PrabhatNeural",        # Indian English male
+    "neerja": "en-IN-NeerjaExpressiveNeural",# Indian English expressive female
     "ryan": "en-GB-RyanNeural",              # British JARVIS
     "guy": "en-US-GuyNeural",                # Mark-LIV fallback male
     "christopher": "en-US-ChristopherNeural",# American deep male
 }
+
+
+def is_hindi_or_hinglish(text: str) -> bool:
+    """Detect if text contains Devanagari script or common Romanized Hindi/Hinglish vocabulary."""
+    if not text:
+        return False
+    if re.search(r"[\u0900-\u097f]", text):
+        return True
+    hinglish_markers = {
+        "kaisa", "kaise", "kaisi", "accha", "theek", "bhej", "diya", "karo", "karna", "hai", "hain", "hoon",
+        "nhi", "nahi", "kya", "kyun", "kyu", "kaun", "kab", "kahan", "yahan", "wahan", "bolo", "bol", "batao",
+        "namaste", "shukriya", "dhanyawad", "dekha", "suno", "samajh", "aaya", "gaya", "chalo", "shuru", "band",
+        "kholo", "mera", "meri", "mere", "aap", "tum", "hum", "sab", "kar", "ho", "bhai", "yaar"
+    }
+    words = set(re.findall(r"\b[a-zA-Z]+\b", text.lower()))
+    return bool(words & hinglish_markers)
+
 
 
 class VoiceEngine:
@@ -151,7 +172,10 @@ class VoiceEngine:
 
                     # 2. If not Gemini or Gemini failed, try Edge-TTS Neural voice
                     if not played and curr.lower() != "david":
-                        edge_voice = EDGE_NEURAL_VOICES.get(curr.lower(), curr if 'neural' in curr.lower() else 'en-GB-RyanNeural')
+                        if is_hindi_or_hinglish(text):
+                            edge_voice = "hi-IN-MadhurNeural"
+                        else:
+                            edge_voice = EDGE_NEURAL_VOICES.get(curr.lower(), curr if 'neural' in curr.lower() else 'hi-IN-MadhurNeural')
                         played = loop.run_until_complete(self._speak_edge_tts(text, edge_voice))
 
                     # 3. Final Fallback: Offline pyttsx3 (Microsoft David)
