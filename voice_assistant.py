@@ -135,15 +135,53 @@ def print_voice_header(mic_name: str):
         console.print("[bold yellow]Simply speak into your mic:[/bold yellow] [dim]\"Open Chrome\", \"What's my CPU usage?\", \"Volume up\"[/dim]\n")
 
 
-def clean_command(text: str) -> tuple:
-    """Extract command, stripping any wake word if spoken."""
+GHOST_FILLER_WORDS = {
+    "you", "ah", "yeah", "okay", "um", "oh", "hm", "mhm", "uh", "so", "like", 
+    "the", "a", "an", "ok", "yep", "nope", "hey", "well", "right", "i", "me"
+}
+ACTION_KEYWORDS = {
+    "open", "play", "mute", "unmute", "pause", "stop", "help", "status", "lock", 
+    "sleep", "restart", "close", "kya", "batao", "chalao", "band", "time", "date",
+    "weather", "cpu", "ram", "volume", "take", "click", "type", "press", "search"
+}
+
+def clean_command(text: str) -> tuple[bool, str]:
+    """Extract command, stripping wake word and filtering ambient ghost words/noise."""
     lower = text.lower().strip()
+    has_wake_word = False
+    clean = lower
+
     for kw in WAKE_WORDS:
         pattern = rf'\b{re.escape(kw)}\b[\s,:.\.?!]*'
         if re.search(pattern, lower):
+            has_wake_word = True
             clean = re.sub(pattern, '', lower, count=1).strip()
-            return True, clean
-    return (False, '') if REQUIRE_WAKE_WORD else (True, lower)
+            break
+
+    # If wake word was spoken, user is explicitly talking to Prime
+    if has_wake_word:
+        return True, clean
+
+    # If wake word is required but was not heard
+    if REQUIRE_WAKE_WORD:
+        return False, ''
+
+    # Open-Mic Mode: Filter ambient noises, breath fragments, and isolated filler utterances
+    words = re.findall(r'\b[a-zA-Z0-9_\u0900-\u097F]+\b', lower)
+    if not words:
+        return False, ''
+
+    # Filter out pure filler sounds (e.g. "you", "yeah yeah", "okay okay", "ah")
+    meaningful = [w for w in words if w not in GHOST_FILLER_WORDS]
+    if not meaningful:
+        return False, ''
+
+    # If short phrase (<=3 words), must have at least 2 meaningful words OR start with an action keyword
+    if len(words) <= 3:
+        if len(meaningful) < 2 and words[0] not in ACTION_KEYWORDS and words[-1] not in ACTION_KEYWORDS:
+            return False, ''
+
+    return True, lower
 
 
 def on_tool_call(name: str, args: dict):

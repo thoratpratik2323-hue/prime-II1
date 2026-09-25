@@ -129,9 +129,9 @@ class AIAgent:
                 from google import genai
                 from google.genai import types
 
-                self._gemini_client = genai.Client(api_key=config.gemini_api_key)
+                self._gemini_client = genai.Client(api_key=config.gemini_api_key, http_options={"timeout": 12000})
                 preferred = config.get_default_model("gemini")
-                models_to_try = [preferred] + [m for m in ("gemini-flash-lite-latest", "gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-2.5-flash") if m != preferred]
+                models_to_try = [preferred] + ([ "gemini-2.5-flash" ] if preferred != "gemini-2.5-flash" else [])
                 
                 self._gemini_chat = None
                 for m in models_to_try:
@@ -165,8 +165,8 @@ class AIAgent:
                 if provider == "ollama" and (not api_key or api_key == "no-key"):
                     api_key = "ollama"
 
-                self._openai_client = OpenAI(base_url=base_url, api_key=api_key)
-                log.info("Initialized OpenAI-compatible client for %s at %s", provider, base_url)
+                self._openai_client = OpenAI(base_url=base_url, api_key=api_key, timeout=7.0)
+                log.info("Initialized OpenAI-compatible client for %s at %s (timeout: 7.0s)", provider, base_url)
             except Exception as e:
                 log.error("Failed to init OpenAI-compatible client: %s", e)
                 self._openai_client = None
@@ -234,23 +234,39 @@ class AIAgent:
                 trace_logger.end_trace(active_trace, response=res)
                 self._record_memory_turn(user_input, res)
                 return res
-            # Fallback to OpenAI-compatible provider if configured
+            # Fallback to ultra-fast OpenAI-compatible provider (Groq / OpenRouter)
+            if self._openai_client is None and (config.groq_api_key or config.openrouter_api_key):
+                try:
+                    from openai import OpenAI
+                    if config.groq_api_key:
+                        self._openai_client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=config.groq_api_key, timeout=6.0)
+                        self._active_fallback_model = "openai/gpt-oss-120b"
+                    elif config.openrouter_api_key:
+                        self._openai_client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=config.openrouter_api_key, timeout=6.0)
+                        self._active_fallback_model = "nvidia/nemotron-3.5-lightning:free"
+                except Exception as ex:
+                    log.warning("Could not init on-demand fallback client: %s", ex)
+
             if self._openai_client is not None:
-                log.info("Gemini failed, falling back to OpenAI-compatible provider...")
+                log.info("Gemini exhausted/timed-out. Falling back instantly to ultra-fast provider...")
                 res = self._process_openai_compatible(user_input, on_tool_call, logged_tool_result)
-                trace_logger.end_trace(active_trace, response=res)
-                self._record_memory_turn(user_input, res)
-                return res
+                if res and not res.startswith("Network connection unreachable"):
+                    trace_logger.end_trace(active_trace, response=res)
+                    self._record_memory_turn(user_input, res)
+                    return res
 
         # 2. If provider is an OpenAI-compatible provider
         if self._openai_client is not None:
             res = self._process_openai_compatible(user_input, on_tool_call, logged_tool_result)
-            trace_logger.end_trace(active_trace, response=res)
-            self._record_memory_turn(user_input, res)
-            return res
+            if res and not res.startswith("Network connection unreachable"):
+                trace_logger.end_trace(active_trace, response=res)
+                self._record_memory_turn(user_input, res)
+                return res
 
-        # 3. Fallback: Local rule-based command execution
+        # 3. Fallback: Local rule-based command execution (100% offline!)
         res = self._process_local_fallback(user_input, on_tool_call, logged_tool_result)
+        if not res:
+            res = "Offline mode active, Sir. Network unreachable. Local command engine ready."
         trace_logger.end_trace(active_trace, response=res)
         self._record_memory_turn(user_input, res)
         return res
@@ -354,28 +370,26 @@ class AIAgent:
 
             return "Tool operations completed, Sir."
         except Exception as e:
-            log.warning("Gemini primary chat error: %s. Attempting model failover ladder...", e)
-            # Try failover models
-            for fallback_model in ("gemini-flash-lite-latest", "gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-2.5-flash"):
-                if getattr(self, "_current_gemini_model", "") == fallback_model:
-                    continue
+            log.warning("Gemini chat error: %s. Initiating fast failover...", e)
+            # Try single fast failover to gemini-2.5-flash if we weren't already using it
+            if getattr(self, "_current_gemini_model", "") != "gemini-2.5-flash":
                 try:
-                    log.info("Failing over to Gemini model: %s", fallback_model)
+                    log.info("Failing over directly to Gemini 2.5 Flash...")
                     self._gemini_chat = self._gemini_client.chats.create(
-                        model=fallback_model,
+                        model="gemini-2.5-flash",
                         config=types.GenerateContentConfig(
                             system_instruction=self.get_system_prompt(),
                             tools=get_gemini_tools(),
                             temperature=0.7,
                         ),
                     )
-                    self._current_gemini_model = fallback_model
+                    self._current_gemini_model = "gemini-2.5-flash"
                     return self._process_gemini(user_input, on_tool_call, on_tool_result)
                 except Exception as fb_err:
-                    log.warning("Failover to %s failed: %s", fallback_model, fb_err)
+                    log.warning("Fast failover to Gemini 2.5 Flash failed: %s", fb_err)
 
-            # Fallback to local rule-based command handling
-            log.info("Gemini models exhausted. Returning exhaustion sentinel...")
+            # Gemini models exhausted or timed out
+            log.info("Gemini exhausted/timed-out. Routing to ultra-fast provider fallback...")
             return "__GEMINI_EXHAUSTED__"
 
     def _process_openai_compatible(
@@ -385,7 +399,7 @@ class AIAgent:
         on_tool_result: Optional[Callable[[str, Any], None]],
     ) -> str:
         provider = config.get_active_provider()
-        model = config.get_default_model(provider)
+        model = getattr(self, "_active_fallback_model", None) or config.get_default_model(provider)
         tools = get_openai_tools()
 
         user_message = {"role": "user", "content": user_input}
@@ -399,6 +413,7 @@ class AIAgent:
                     messages=messages,
                     tools=tools,
                     tool_choice="auto",
+                    timeout=6.0,
                 )
                 if not resp.choices:
                     return 'Provider returned empty response.'
@@ -448,8 +463,11 @@ class AIAgent:
                 self.history = self.history[-100:]
             return final_text
         except Exception as e:
-            log.exception("OpenAI-compatible provider error: %s", e)
-            return f"Provider error: {e}"
+            log.warning("OpenAI-compatible provider error (%s). Falling back to local offline engine...", e)
+            local_res = self._process_local_fallback(user_input, on_tool_call, on_tool_result)
+            if local_res:
+                return local_res
+            return "Network connection unreachable, Sir. Local offline command engine ready."
 
     def _process_local_fallback(
         self,

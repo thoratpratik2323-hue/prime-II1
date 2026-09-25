@@ -141,9 +141,10 @@ class VoiceEngine:
                     played = False
                     curr = self.current_voice.strip()
 
-                    # 1. Check if configured for Mark-LIV Gemini voice (Charon, Puck, Fenrir, etc.)
+                    # 1. Check if configured for Mark-LIV Gemini voice (only if tts_engine is explicitly 'gemini')
+                    use_gemini_engine = getattr(config, "tts_engine", "edge-tts") == "gemini"
                     is_gemini_voice = curr in MARK_LIV_GEMINI_VOICES.values() or curr.lower() in MARK_LIV_GEMINI_VOICES
-                    if is_gemini_voice and config.gemini_api_key:
+                    if use_gemini_engine and is_gemini_voice and config.gemini_api_key:
                         target_voice = MARK_LIV_GEMINI_VOICES.get(curr.lower(), curr)
                         played = self._speak_gemini_tts(text, target_voice)
 
@@ -312,7 +313,15 @@ class VoiceEngine:
 
     def _speak_pyttsx3_male(self, text: str):
         """Offline fallback using Windows native male voice (David)."""
+        co_init = False
         try:
+            try:
+                import pythoncom
+                pythoncom.CoInitialize()
+                co_init = True
+            except Exception:
+                pass
+
             engine = pyttsx3.init()
             engine.setProperty("rate", config.voice_rate)
             engine.setProperty("volume", config.voice_volume)
@@ -327,6 +336,12 @@ class VoiceEngine:
             engine.runAndWait()
         except Exception as e:
             log.warning("pyttsx3 offline fallback error: %s", e)
+        finally:
+            if co_init:
+                try:
+                    pythoncom.CoUninitialize()
+                except Exception:
+                    pass
 
     def speak(self, text: str):
         """Queue text to be spoken."""

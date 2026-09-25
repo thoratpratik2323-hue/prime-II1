@@ -714,6 +714,12 @@ def main():
     except Exception:
         pass
 
+    try:
+        import tray_manager
+        tray_manager.start_tray_icon()
+    except Exception:
+        pass
+
     from voice_assistant import get_dynamic_welcome_message
     welcome_msg = get_dynamic_welcome_message()
     console.print(f"  [bold cyan]Prime:[/bold cyan] [bold bright_white]\"{welcome_msg}\"[/bold bright_white]\n")

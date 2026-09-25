@@ -57,8 +57,8 @@ class Config:
         except ValueError:
             self.voice_volume = 1.0
 
-        self.tts_voice = os.getenv("TTS_VOICE", "Charon").strip()
-        self.tts_engine = os.getenv("TTS_ENGINE", "gemini").strip().lower()
+        self.tts_voice = os.getenv("TTS_VOICE", "en-GB-RyanNeural").strip()
+        self.tts_engine = os.getenv("TTS_ENGINE", "edge-tts").strip().lower()
         self.require_wake_word = os.getenv("REQUIRE_WAKE_WORD", "true").strip().lower() in ("true", "1", "yes")
         self.default_model = self.get_default_model(self.get_active_provider())
 
