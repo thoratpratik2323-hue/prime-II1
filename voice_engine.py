@@ -289,13 +289,27 @@ class VoiceEngine:
             log.debug("Gemini TTS (%s) failed: %s", voice_name, e)
             return False
 
-    async def _speak_edge_tts(self, text: str, voice_name: str = "en-GB-RyanNeural") -> bool:
+    def _get_edge_rate(self) -> str:
+        """Calculate Edge-TTS rate string from config (e.g. '+22%')."""
+        raw = getattr(config, "voice_rate_str", "") or os.getenv("VOICE_RATE", "+22%").strip()
+        if "%" in raw:
+            return raw if raw.startswith(("+", "-")) else f"+{raw}"
+        try:
+            val = int(raw)
+            if -50 <= val <= 100 and val != 0:
+                return f"+{val}%" if val > 0 else f"{val}%"
+        except (ValueError, TypeError):
+            pass
+        return "+22%"  # Crisp, lively conversational pace
+
+    async def _speak_edge_tts(self, text: str, voice_name: str = "hi-IN-MadhurNeural") -> bool:
         """Synthesize with Edge-TTS neural voice and play in-memory via pygame (zero disk I/O)."""
         try:
+            rate_str = self._get_edge_rate()
             comm = edge_tts.Communicate(
                 text,
                 voice_name,
-                rate="+5%",
+                rate=rate_str,
                 volume="+0%",
                 pitch="+0Hz"
             )

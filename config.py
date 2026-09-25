@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from typing import Optional
 import platform
+import re
 from dotenv import load_dotenv, set_key
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -47,10 +48,13 @@ class Config:
         self.model = (os.getenv("AI_MODEL") or "").strip()
 
         self.voice_output = os.getenv("VOICE_OUTPUT", "true").strip().lower() in ("true", "1", "yes")
+        raw_rate = os.getenv("VOICE_RATE", "+22%").strip()
+        self.voice_rate_str = raw_rate if raw_rate else "+22%"
         try:
-            self.voice_rate = int(os.getenv("VOICE_RATE", "185"))
+            clean_digits = re.sub(r"[^\d-]", "", raw_rate)
+            self.voice_rate = int(clean_digits) if clean_digits else 215
         except ValueError:
-            self.voice_rate = 185
+            self.voice_rate = 215
 
         try:
             self.voice_volume = float(os.getenv("VOICE_VOLUME", "1.0"))
