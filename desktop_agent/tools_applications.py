@@ -147,7 +147,11 @@ def close_application(args: Dict[str, Any]) -> Dict[str, Any]:
     if not name:
         raise ToolError("Parameter 'name' (application name) is required.")
     spec = _resolve_app(str(name))
-    image = spec["image"]
+    if spec.get("kind") == "url":
+        return {"result": f"'{spec.get('label', name)}' is a web application. Use closeWindow to close its browser tab."}
+    image = spec.get("image") or spec.get("exe") or f"{name}.exe"
+    if not image.lower().endswith(".exe") and not "." in image:
+        image = f"{image}.exe"
     # Graceful close first (WM_CLOSE via taskkill), then force if requested.
     graceful_flag = "" if force else ""
     force_flag = " /F" if force else ""

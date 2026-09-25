@@ -245,8 +245,8 @@ def search_files(args: Dict[str, Any]) -> Dict[str, Any]:
       extension="py"                          -> same as name="*.py"
       name="report*" under "Desktop"
     """
-    folder = _resolve_folder(args.get("folder") or args.get("under") or "home")
-    name = args.get("name") or args.get("pattern")
+    folder = _resolve_folder(args.get("folder") or args.get("under") or args.get("path") or "home")
+    name = args.get("name") or args.get("pattern") or args.get("query")
     extension = args.get("extension")
     limit = int(args.get("limit", 100))
 
@@ -256,8 +256,10 @@ def search_files(args: Dict[str, Any]) -> Dict[str, Any]:
         pattern = "*" + str(extension)
     elif name:
         pattern = str(name)
+        if not any(c in pattern for c in ("*", "?", "[")):
+            pattern = f"*{pattern}*"
     else:
-        raise ToolError("Provide 'name' glob or 'extension'.")
+        raise ToolError("Provide 'name' glob, 'query', or 'extension'.")
 
     if not folder.exists():
         raise ToolError(f"Folder does not exist: {folder}")

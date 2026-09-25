@@ -947,6 +947,9 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         'createPythonFile': [('filename', 'path'), ('code', 'content')],
         'openFolder': [('folder', 'path')],
         'saveScreenshot': [('filename', 'name')],
+        'patchCodeFile': [('path', 'file_path'), ('target', 'search_content'), ('replacement', 'replace_content')],
+        'debugCodeFile': [('path', 'file_path'), ('trace', 'error_trace')],
+        'runUnitTests': [('test_path', 'path')],
     }
     for src, dst in arg_mappings.get(name, []):
         if src in args and dst not in args:

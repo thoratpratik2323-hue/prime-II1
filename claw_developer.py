@@ -78,9 +78,9 @@ def patch_file(
     replace_content: str
 ) -> Dict[str, Any]:
     """Surgical search-and-replace patching of source code files."""
+    if not file_path or not Path(file_path).is_file():
+        return {"ok": False, "error": f"Path '{file_path}' is not a valid file."}
     path = Path(file_path).resolve()
-    if not path.exists():
-        return {"ok": False, "error": f"File '{file_path}' does not exist."}
 
     try:
         content = path.read_text(encoding="utf-8", errors="replace")
@@ -253,9 +253,9 @@ def debug_file(
     instructions: Optional[str] = None
 ) -> Dict[str, Any]:
     """Analyze a file using Gemini 3.6 Flash and generate an autonomous fix."""
+    if not file_path or not Path(file_path).is_file():
+        return {"ok": False, "error": f"File '{file_path}' not found or is a directory."}
     path = Path(file_path).resolve()
-    if not path.exists():
-        return {"ok": False, "error": f"File '{file_path}' not found."}
 
     try:
         code_content = path.read_text(encoding="utf-8", errors="replace")
