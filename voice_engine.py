@@ -8,6 +8,7 @@ Includes speech recognition with ambient noise adjustment.
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 import os
 import queue
@@ -265,12 +266,8 @@ class VoiceEngine:
             return False
 
     async def _speak_edge_tts(self, text: str, voice_name: str = "en-GB-RyanNeural") -> bool:
-        """Synthesize with Edge-TTS neural voice and play via pygame."""
-        temp_file = None
+        """Synthesize with Edge-TTS neural voice and play in-memory via pygame (zero disk I/O)."""
         try:
-            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-                temp_file = f.name
-
             comm = edge_tts.Communicate(
                 text,
                 voice_name,
@@ -278,17 +275,23 @@ class VoiceEngine:
                 volume="+0%",
                 pitch="+0Hz"
             )
-            await comm.save(temp_file)
+            buf = io.BytesIO()
+            async for chunk in comm.stream():
+                if self._abort_utterance.is_set():
+                    return False
+                if chunk["type"] == "audio":
+                    buf.write(chunk["data"])
 
-            if not os.path.exists(temp_file) or os.path.getsize(temp_file) == 0:
+            if buf.tell() == 0:
                 return False
 
+            buf.seek(0)
             if not pygame.mixer.get_init():
                 pygame.mixer.init(frequency=24000, size=-16, channels=1, buffer=2048)
 
             clock = pygame.time.Clock()
             try:
-                pygame.mixer.music.load(temp_file)
+                pygame.mixer.music.load(buf)
                 pygame.mixer.music.play()
 
                 while pygame.mixer.music.get_busy() and not self._abort_utterance.is_set():
@@ -304,12 +307,6 @@ class VoiceEngine:
         except Exception as e:
             log.debug("Edge-TTS speech error: %s", e)
             return False
-        finally:
-            if temp_file and os.path.exists(temp_file):
-                try:
-                    os.remove(temp_file)
-                except Exception:
-                    pass
 
     def _speak_pyttsx3_male(self, text: str):
         """Offline fallback using Windows native male voice (David)."""

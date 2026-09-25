@@ -34,5 +34,61 @@
     "topic": "Tool Failure: calendarManager",
     "insight": "Command '2:00 ka kam kya hai' failed with args {}. Ensure parameters and fallback routing are validated.",
     "source": "trace_reflection_loop"
+  },
+  {
+    "id": 6,
+    "timestamp": "2026-09-25T21:04:16.385596",
+    "topic": "Tool Failure: closeApplication",
+    "insight": "Command 'close the whatsapp' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
+  },
+  {
+    "id": 7,
+    "timestamp": "2026-09-25T21:04:51.519285",
+    "topic": "Tool Failure: closeApplication",
+    "insight": "Command 'close whatsapp close chrome' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
+  },
+  {
+    "id": 8,
+    "timestamp": "2026-09-25T21:14:42.935171",
+    "topic": "Tool Failure: createFile",
+    "insight": "Command 'no there is nothing in my clipboard' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
+  },
+  {
+    "id": 9,
+    "timestamp": "2026-09-25T21:33:26.528865",
+    "topic": "Tool Failure: createFile",
+    "insight": "Command 'can you just copy all the stuff you have said right now and paste it in my desktop open open' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
+  },
+  {
+    "id": 10,
+    "timestamp": "2026-09-25T21:35:01.320807",
+    "topic": "Tool Failure: createFile",
+    "insight": "Command 'no it's not comes' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
+  },
+  {
+    "id": 11,
+    "timestamp": "2026-09-25T21:35:01.323316",
+    "topic": "Tool Failure: createFile",
+    "insight": "Command 'no it's not comes' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
+  },
+  {
+    "id": 12,
+    "timestamp": "2026-09-25T21:35:01.325504",
+    "topic": "Tool Failure: createFile",
+    "insight": "Command 'no it's not comes' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
+  },
+  {
+    "id": 13,
+    "timestamp": "2026-09-25T21:35:01.327157",
+    "topic": "Tool Failure: createFile",
+    "insight": "Command 'no it's not comes' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
   }
 ]

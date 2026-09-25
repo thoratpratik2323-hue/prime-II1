@@ -39,6 +39,7 @@ class PredictiveContextEngine:
         self._active_project_path: Optional[Path] = None
         self._active_project_name: str = ""
         self._cached_project_context: Dict[str, Any] = {}
+        self._project_context_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
         self._last_focus_check: float = time.time()
         self._coding_streak_start: Optional[float] = None
         self._focus_music_played: bool = False
@@ -109,6 +110,18 @@ class PredictiveContextEngine:
 
     def _prefetch_codebase_context(self, project_name: str) -> None:
         """Scan project directory, infer stack, inspect git status, and query Obsidian notes."""
+        now_ts = time.time()
+        cached = self._project_context_cache.get(project_name.lower())
+        if cached:
+            cached_time, cached_ctx = cached
+            if now_ts - cached_time < 300.0:  # 5-minute TTL cache hit
+                self._cached_project_context = cached_ctx
+                target_str = cached_ctx.get("target_dir")
+                if target_str:
+                    self._active_project_path = Path(target_str)
+                log.debug("Context cache hit for '%s' (age: %.1fs).", project_name, now_ts - cached_time)
+                return
+
         context: Dict[str, Any] = {
             "project_name": project_name,
             "detected_at": datetime.now().isoformat(),
@@ -183,7 +196,9 @@ class PredictiveContextEngine:
         except Exception:
             pass
 
+        context["target_dir"] = str(target_dir)
         self._cached_project_context = context
+        self._project_context_cache[project_name.lower()] = (now_ts, context)
 
         # Feed into working memory of the unified brain
         try:

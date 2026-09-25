@@ -163,6 +163,14 @@ class AmbientSpatialSentinel:
             self._stop_event.wait(self.check_interval_sec)
 
     def _perceive_cycle(self) -> None:
+        # Performance & Battery Optimization: If user is idle (AFK > 90s), skip screen capture
+        try:
+            from prime_operator import get_system_idle_seconds
+            if get_system_idle_seconds() > 90.0:
+                return
+        except Exception:
+            pass
+
         now = time.time()
         title, pname = self.get_active_window_info()
         title_lower = title.lower()
