@@ -93,8 +93,53 @@ class PrimeOperator:
         self._thread = threading.Thread(target=self._worker_loop, daemon=True, name="PrimeProactiveOperator")
         self._thread.start()
 
+        # Start Advanced Autonomous Sentinels
+        try:
+            from ambient_spatial_sentinel import ambient_sentinel
+            ambient_sentinel.start()
+        except Exception:
+            pass
+
+        try:
+            from predictive_context_engine import predictive_engine
+            predictive_engine.start()
+        except Exception:
+            pass
+
+        try:
+            from self_healing_engine import self_healer
+            self_healer.start()
+        except Exception:
+            pass
+
+        try:
+            from neural_mesh_bridge import mesh_bridge
+            mesh_bridge.start_clipboard_sync()
+        except Exception:
+            pass
+
     def stop(self) -> None:
         self._stop_event.set()
+        try:
+            from ambient_spatial_sentinel import ambient_sentinel
+            ambient_sentinel.stop()
+        except Exception:
+            pass
+        try:
+            from predictive_context_engine import predictive_engine
+            predictive_engine.stop()
+        except Exception:
+            pass
+        try:
+            from self_healing_engine import self_healer
+            self_healer.stop()
+        except Exception:
+            pass
+        try:
+            from neural_mesh_bridge import mesh_bridge
+            mesh_bridge.stop()
+        except Exception:
+            pass
 
     def _speak(self, text: str) -> None:
         if self._dnd_mode:

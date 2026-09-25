@@ -57,20 +57,34 @@ Prime interacts with Windows exactly like a human engineer:
 - **Shell & PowerShell:** `executePowerShell(command)`, `openPath(path)`, `listDrives()`, `manageProcess(action, name_or_pid)`.
 - **Window Management:** `listOpenWindows()`, `focusWindow(title)`.
 
-### 4. 📱 Mobile Voice Room Remote Control
-- Built-in Flask & WebSockets room server (`mobile_room_server.py` on port `8765`).
-- Open `http://<your-pc-ip>:8765` on your smartphone to talk to Prime from anywhere in your house over local Wi-Fi.
+### 4. 👁️ Ambient Vision & Spatial Awareness
+- **Real-Time Multimodal Workflow Tracking:** Continuously perceives the operator's desktop workspace without waiting for one-off commands.
+- **Stuck & Error Sentinel:** Automatically detects recurring compiler errors (`SyntaxError`, `npm ERR!`, `TypeError`, stack traces) or prolonged visual stagnation on code (> 4 min).
+- **Proactive Multimodal Interventions:** Offers intelligent diagnostics and automated code fixes right when you hit a wall.
+- **Fatigue & Focus Monitoring:** Tracks continuous dev intensity and suggests restorative breaks.
 
-### 5. 🛡️ Windows Single-Instance Mutex & Startup Sentinel
-- **No Duplicate Instances:** Protected by Windows Kernel Named Mutex (`Global\PrimeAI_SingleInstance_Mutex`). Multiple processes or accidental launches never duplicate audio or voices.
-- **Silent Boot Setup:** Integrated via Windows Registry (`HKCU\...\Run`) with `start-prime-background.vbs` for silent startup.
-- **Background Sentinels:** 
-  - 📂 **Downloads Auto-Classifier:** Automatically sorts downloads into organized folders.
-  - 🌙 **Sleep Reflection Sentinel:** Prompts evening reflection after 11 PM.
-  - 🔋 **Battery & Vitals Sentinel:** Alerts on low battery or thermal spikes.
-  - 🌅 **On-Demand Briefing:** Morning briefing is completely on-demand (`/briefing` or voice request), never interrupting you unprompted.
+### 5. 🔮 Deep Predictive Context & Anticipatory Memory
+- **Codebase Anticipation:** Detects when you switch projects in VS Code or Terminal, automatically inferring the tech stack (Node, Python, Rust, Flutter), git branch, and recent commits.
+- **Instant Pre-fetching:** Pre-loads project architecture and related Obsidian documentation into working memory before you even ask.
+- **Deep Work Flow Cues:** Detects intense coding sessions and automatically queues ambient focus audio / lo-fi beats.
+- **Autonomous Obsidian Thought Crystallization:** Synthesizes daily milestones, solved issues, and learned lessons directly into `Obsidian_Vault/Daily_Notes/YYYY-MM-DD.md`.
 
----
+### 6. 🌐 Seamless Cross-Device Omnipresence (Neural Mesh Bridge)
+- **Unified Neural Mesh:** Securely bridges your Windows PC with your mobile smartphone and tablet via local LAN.
+- **Bidirectional Clipboard Sync:** Copies on your phone appear instantly on PC clipboard, and vice versa.
+- **Real-time SSE Notification Stream:** Pushes build completions, stuck alerts, and system vitals straight to your phone.
+- **Remote Mobile Cockpit:** Speak to Prime from anywhere in your home, trigger hardware quick actions (Lock PC, Mute, Play/Pause, Live Screen Preview).
+- **Dynamic 6-Character PIN Pairing:** Encrypted, zero-setup pairing over local Wi-Fi.
+
+### 7. 🧬 Autonomous Self-Healing & Code Evolution
+- **Continuous System Health Audit:** Runs automated self-diagnostic suites across tool dispatch, plugin caches, SQLite knowledge graph, execution traces, and LLM providers.
+- **Autonomous Error Isolation & Patching:** Detects recurring tool failures and auto-heals directory anomalies or missing resources.
+- **Runtime Performance Self-Tuning:** Auto-compacts trace logs (> 2MB) and optimizes plugin discovery to maintain sub-0.05s response times.
+
+### 8. 🛡️ Windows Single-Instance Mutex & 24/7 Always-On Power State
+- **No Duplicate Instances:** Protected by Windows Kernel Named Mutex (`Global\PrimeAI_SingleInstance_Mutex`).
+- **24/7 Always-On Power:** Prevents Windows sleep/hibernate while on AC power (`ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED`).
+- **Tray Management:** Dynamic status indicator in the Windows System Tray with one-click mic mute and terminal launcher.
 
 ## 🛠️ Tool Arsenal Overview
 

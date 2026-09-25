@@ -682,6 +682,26 @@ TOOL_SPECS: List[Dict[str, Any]] = [
             }
         }
     },
+    {
+        "name": "ambientVisionInspect",
+        "description": "Perceive and inspect active developer workflow screen in real-time to diagnose errors, identify compiler issues, or get proactive fix recommendations.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "Optional specific focus for the spatial inspection."}
+            }
+        }
+    },
+    {
+        "name": "neuralMeshPair",
+        "description": "Get local LAN pairing credentials, PIN token, and URL to connect smartphone or tablet to Prime AI.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "selfHealingAudit",
+        "description": "Run autonomous self-diagnostic audit and self-healing across tools, memory, plugins, and providers.",
+        "parameters": {"type": "object", "properties": {}}
+    },
 ]
 
 
@@ -839,6 +859,40 @@ def _handle_operator_control(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"Operator control error: {e}"}
 
 
+def _handle_ambient_vision(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from ambient_spatial_sentinel import ambient_sentinel
+        return {"ok": True, "result": ambient_sentinel.force_analyze_workflow()}
+    except Exception as e:
+        return {"ok": False, "error": f"Ambient vision inspection failed: {e}"}
+
+def _handle_neural_mesh_pair(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from neural_mesh_bridge import mesh_bridge
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        except Exception:
+            ip = "127.0.0.1"
+        finally:
+            s.close()
+        return {
+            "ok": True,
+            "result": f"Neural Mesh Pairing PIN: {mesh_bridge.auth_token}. Connect from phone browser: http://{ip}:8765/?pin={mesh_bridge.auth_token}"
+        }
+    except Exception as e:
+        return {"ok": False, "error": f"Neural mesh pairing failed: {e}"}
+
+def _handle_self_healing_audit(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from self_healing_engine import self_healer
+        return {"ok": True, "result": self_healer.run_full_system_audit()}
+    except Exception as e:
+        return {"ok": False, "error": f"Self-healing audit failed: {e}"}
+
+
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
     "getTime": _handle_time,
@@ -860,6 +914,9 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "spotifyControl": _handle_spotify_control,
     "quickNote": _handle_quick_note,
     "operatorControl": _handle_operator_control,
+    "ambientVisionInspect": _handle_ambient_vision,
+    "neuralMeshPair": _handle_neural_mesh_pair,
+    "selfHealingAudit": _handle_self_healing_audit,
 }
 
 

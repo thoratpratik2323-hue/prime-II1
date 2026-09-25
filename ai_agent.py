@@ -100,6 +100,15 @@ class AIAgent:
         except Exception:
             pass
 
+        # Deep Predictive Codebase & Workflow Context
+        try:
+            from predictive_context_engine import predictive_engine
+            p_ctx = predictive_engine.get_predictive_system_context()
+            if p_ctx:
+                prompt += f"\n\n{p_ctx}"
+        except Exception:
+            pass
+
         return prompt
 
     def activate_persona(self, name_or_id: str) -> Optional[str]:

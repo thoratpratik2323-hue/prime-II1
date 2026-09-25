@@ -36,4 +36,6 @@ memory/archive/*.jsonl
 scratch/ip-codemaker-agent/
 scratch/mark-liv/
 scratch/prime-agent/
+data/mesh_token.json
+love_letter*.txt
 

@@ -130,6 +130,68 @@ def api_chat():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+from flask import Flask, jsonify, request, send_from_directory, Response, stream_with_context
+from neural_mesh_bridge import mesh_bridge
+
+# Start background PC clipboard watcher
+mesh_bridge.start_clipboard_sync()
+
+@app.route("/api/mesh/pair")
+def api_mesh_pair():
+    """Return local LAN pairing credentials."""
+    ip = get_local_ip()
+    return jsonify({
+        "ok": True,
+        "token": mesh_bridge.auth_token,
+        "lan_ip": ip,
+        "port": 8765,
+        "connect_url": f"http://{ip}:8765/?pin={mesh_bridge.auth_token}",
+    })
+
+@app.route("/api/mesh/clipboard", methods=["GET", "POST"])
+def api_mesh_clipboard():
+    """Bidirectional clipboard endpoint for mobile synchronization."""
+    if request.method == "POST":
+        data = request.get_json(force=True, silent=True) or {}
+        text = data.get("text", "")
+        if text:
+            success = mesh_bridge.set_pc_clipboard(text)
+            return jsonify({"ok": success})
+        return jsonify({"ok": False, "error": "Empty text"}), 400
+    else:
+        text = mesh_bridge._get_pc_clipboard()
+        return jsonify({"ok": True, "text": text})
+
+@app.route("/api/mesh/action", methods=["POST"])
+def api_mesh_action():
+    """Execute quick hardware actions remotely from phone."""
+    data = request.get_json(force=True, silent=True) or {}
+    action = data.get("action", "")
+    params = data.get("params", {})
+    res = mesh_bridge.execute_remote_action(action, params)
+    return jsonify(res)
+
+@app.route("/api/mesh/events")
+def api_mesh_events():
+    """Real-time Server-Sent Events (SSE) stream to connected mobile devices."""
+    def event_stream():
+        q = mesh_bridge.subscribe_events()
+        try:
+            # Yield initial connection message
+            yield f"data: {json.dumps({'type': 'connected', 'token_valid': True})}\n\n"
+            while True:
+                try:
+                    event = q.get(timeout=25.0)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except Exception:
+                    # Keep-alive heartbeat
+                    yield f"data: {json.dumps({'type': 'heartbeat', 'time': time.time()})}\n\n"
+        finally:
+            mesh_bridge.unsubscribe_events(q)
+
+    return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
+
+
 @app.route("/api/status")
 def api_status():
     """Telemetry endpoint for mobile cockpit status."""
@@ -144,6 +206,7 @@ def api_status():
             "ram_percent": mem,
             "tools_count": len(TOOL_SPECS),
             "operator": "Pratik Thorat",
+            "mesh_token": mesh_bridge.auth_token,
         })
     except Exception as e:
         return jsonify({"status": "unknown", "error": str(e)})

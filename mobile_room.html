@@ -370,13 +370,22 @@
       <span style="color: #00e5ff;">Prime:</span> "Welcome back, Pratik! Cockpit is listening. Speak into your mic or type a command below."
     </div>
 
+    <!-- Neural Mesh Cross-Device Quick Bar -->
+    <div style="display: flex; gap: 6px; width: 100%; margin-bottom: 8px; justify-content: center; flex-wrap: wrap;">
+      <button onclick="syncClipboardToPC()" style="background: rgba(0,229,255,0.08); border: 1px solid var(--border); color: var(--cyan); padding: 6px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-family: 'Orbitron'; font-weight: 700;">📋 PUSH CLIP</button>
+      <button onclick="pullClipboardFromPC()" style="background: rgba(0,229,255,0.08); border: 1px solid var(--border); color: var(--cyan); padding: 6px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-family: 'Orbitron'; font-weight: 700;">📥 GET PC CLIP</button>
+      <button onclick="triggerRemoteAction('lock_pc')" style="background: rgba(255,23,68,0.12); border: 1px solid rgba(255,23,68,0.3); color: #ff5252; padding: 6px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-family: 'Orbitron'; font-weight: 700;">🔒 LOCK PC</button>
+      <button onclick="triggerRemoteAction('play_pause')" style="background: rgba(255,171,0,0.12); border: 1px solid rgba(255,171,0,0.3); color: var(--amber); padding: 6px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-family: 'Orbitron'; font-weight: 700;">⏯️ MEDIA</button>
+      <button onclick="triggerRemoteAction('screenshot_preview')" style="background: rgba(124,77,255,0.12); border: 1px solid rgba(124,77,255,0.3); color: #b388ff; padding: 6px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-family: 'Orbitron'; font-weight: 700;">📷 SCREEN</button>
+    </div>
+
     <div class="input-bar">
       <input type="text" id="cmdInput" class="input-field" placeholder="Type command to execute on PC..." onkeydown="if(event.key==='Enter') sendTextCommand()" />
       <button class="btn-send" onclick="sendTextCommand()">RUN</button>
     </div>
 
     <button class="btn-connect" id="btnConnect" onclick="toggleVoiceInput()">🎙️ START VOICE LINK</button>
-    <div class="footer">PRIME AI · BUILT FOR PRATIK THORAT · ZERO GUI</div>
+    <div class="footer">PRIME AI · CROSS-DEVICE NEURAL MESH · PRATIK THORAT</div>
   </div>
 </div>
 
@@ -549,6 +558,102 @@
       setVisualState('', 'TAP ORB TO SPEAK');
     }
   }
+  // ── Neural Mesh Cross-Device Sync ──
+  async function syncClipboardToPC() {
+    try {
+      let text = '';
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        text = await navigator.clipboard.readText();
+      }
+      if (!text) {
+        text = prompt('Enter text to push to PC clipboard:');
+      }
+      if (!text) return;
+      const res = await fetch('/api/mesh/clipboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        appendLog('Mesh Clipboard', 'Pushed ' + text.length + ' chars to PC clipboard.');
+      } else {
+        alert('Could not push to PC clipboard: ' + (data.error || 'unknown'));
+      }
+    } catch (e) {
+      alert('Clipboard sync error: ' + e.message);
+    }
+  }
+
+  async function pullClipboardFromPC() {
+    try {
+      const res = await fetch('/api/mesh/clipboard');
+      const data = await res.json();
+      if (data.ok && data.text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(data.text);
+        }
+        appendLog('Mesh Clipboard', 'Copied from PC: "' + data.text.substring(0, 80) + (data.text.length > 80 ? '...' : '') + '"');
+      } else {
+        appendLog('Mesh Clipboard', 'PC clipboard is empty.');
+      }
+    } catch (e) {
+      appendLog('Mesh Error', 'Failed to pull PC clipboard: ' + e.message, true);
+    }
+  }
+
+  async function triggerRemoteAction(action) {
+    try {
+      const res = await fetch('/api/mesh/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        if (action === 'screenshot_preview' && data.image_b64) {
+          const img = document.createElement('img');
+          img.src = data.image_b64;
+          img.style.maxWidth = '100%';
+          img.style.borderRadius = '8px';
+          img.style.marginTop = '6px';
+          transcriptBox.appendChild(img);
+          transcriptBox.scrollTop = transcriptBox.scrollHeight;
+        } else {
+          appendLog('Mesh Action', data.result || 'Executed ' + action);
+        }
+      } else {
+        appendLog('Mesh Error', data.error || 'Action failed', true);
+      }
+    } catch (e) {
+      appendLog('Mesh Error', 'Remote action error: ' + e.message, true);
+    }
+  }
+
+  // SSE Live Notification and Clipboard Event Listener
+  function initMeshEvents() {
+    try {
+      const evtSource = new EventSource('/api/mesh/events');
+      evtSource.onmessage = (e) => {
+        try {
+          const ev = JSON.parse(e.data);
+          if (ev.type === 'notification') {
+            appendLog('⚡ ' + (ev.title || 'Notification'), ev.message || '');
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+          } else if (ev.type === 'clipboard_update') {
+            appendLog('📋 PC Copied', (ev.data || '').substring(0, 60) + '...');
+          }
+        } catch(err) {}
+      };
+      evtSource.onerror = () => {
+        // Will auto reconnect
+      };
+    } catch (e) {
+      console.warn('SSE not initialized:', e);
+    }
+  }
+
+  window.addEventListener('load', initMeshEvents);
 </script>
 </body>
 </html>
