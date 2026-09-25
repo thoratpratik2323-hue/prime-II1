@@ -283,6 +283,64 @@ def launch_on_interactive_desktop(cmd: str) -> bool:
         return False
 
 
+def attach_thread_to_default_desktop() -> bool:
+    """Attaches the calling thread to the physical user desktop (WinSta0\\Default)."""
+    if platform.system() != "Windows":
+        return False
+    try:
+        u32 = ctypes.windll.user32
+        h_desk = u32.OpenDesktopW("Default", 0, False, 0x01FF)  # GENERIC_ALL
+        if h_desk:
+            return bool(u32.SetThreadDesktop(h_desk))
+    except Exception as e:
+        log.debug("Could not attach thread to Default desktop: %s", e)
+    return False
+
+
+def focus_whatsapp_window() -> bool:
+    """Finds and brings the native WhatsApp Desktop window to the foreground."""
+    if platform.system() != "Windows":
+        return False
+    try:
+        import win32gui
+        import win32con
+        attach_thread_to_default_desktop()
+        hwnds = []
+
+        def cb(h, _):
+            if win32gui.IsWindowVisible(h):
+                t = win32gui.GetWindowText(h)
+                c = win32gui.GetClassName(h)
+                if "whatsapp" in t.lower() and c != "Chrome_WidgetWin_1":
+                    hwnds.append(h)
+            return True
+
+        win32gui.EnumWindows(cb, None)
+        if hwnds:
+            hwnd = hwnds[0]
+            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            win32gui.SetForegroundWindow(hwnd)
+            return True
+    except Exception as e:
+        log.debug("focus_whatsapp_window error: %s", e)
+    return False
+
+
+def press_enter_interactive():
+    """Simulates physical Enter key on interactive desktop."""
+    if platform.system() == "Windows":
+        u32 = ctypes.windll.user32
+        u32.keybd_event(0x0D, 0, 0, 0)
+        time.sleep(0.05)
+        u32.keybd_event(0x0D, 0, 2, 0)
+    else:
+        try:
+            import pyautogui
+            pyautogui.press("enter")
+        except Exception:
+            pass
+
+
 def send_via_desktop_protocol(phone_number: str, message: str) -> Dict[str, Any]:
     """Send message via the official Windows whatsapp:// protocol handler on user's desktop."""
     clean_num = phone_number.replace("+", "")
@@ -291,17 +349,19 @@ def send_via_desktop_protocol(phone_number: str, message: str) -> Dict[str, Any]
 
     try:
         if platform.system() == "Windows":
+            # 1. Launch URI on interactive desktop
             launch_on_interactive_desktop(f'explorer.exe "{uri}"')
-            time.sleep(1.8)
+            time.sleep(2.5)
 
-            # Auto-press Enter to send if pyautogui is available
-            try:
-                import pyautogui
-                pyautogui.press("enter")
-                time.sleep(0.3)
-                pyautogui.press("enter")
-            except Exception:
-                pass
+            # 2. Attach current thread to physical desktop and bring WhatsApp to foreground
+            attach_thread_to_default_desktop()
+            focus_whatsapp_window()
+            time.sleep(0.5)
+
+            # 3. Simulate Enter key to send the typed message
+            press_enter_interactive()
+            time.sleep(0.3)
+            press_enter_interactive()
 
             return {
                 "ok": True,
@@ -454,30 +514,36 @@ def send_via_contact_search(contact_name: str, message: str) -> Dict[str, Any]:
         import pyautogui
         import pyperclip
 
-        # 1. Bring WhatsApp Desktop to front
+        # 1. Attach thread to physical desktop and bring WhatsApp Desktop to front
+        attach_thread_to_default_desktop()
         launch_on_interactive_desktop('explorer.exe "whatsapp:"')
-        time.sleep(1.2)
+        time.sleep(1.8)
+
+        focus_whatsapp_window()
+        time.sleep(0.5)
 
         # 2. Press Ctrl + N (New Chat) to immediately focus contact search
         pyautogui.hotkey("ctrl", "n")
-        time.sleep(0.6)
+        time.sleep(0.8)
 
         # 3. Type contact name into the search box
         pyperclip.copy(contact_name)
         pyautogui.hotkey("ctrl", "v")
-        time.sleep(1.0)  # Wait for contact list to filter
+        time.sleep(1.2)  # Wait for contact list to filter
 
         # 4. Select top matched contact
         pyautogui.press("down")
         time.sleep(0.3)
-        pyautogui.press("enter")
-        time.sleep(0.8)
+        press_enter_interactive()
+        time.sleep(1.0)
 
         # 5. Type and send the message
         pyperclip.copy(message)
         pyautogui.hotkey("ctrl", "v")
-        time.sleep(0.4)
-        pyautogui.press("enter")
+        time.sleep(0.5)
+        press_enter_interactive()
+        time.sleep(0.3)
+        press_enter_interactive()
 
         return {
             "ok": True,
