@@ -685,6 +685,184 @@ TOOL_SPECS: List[Dict[str, Any]] = [
 ]
 
 
+# --- Built-in Specialized Tool Handlers ($O(1)$ Dispatch) ---
+
+def _handle_time(args: Dict[str, Any]) -> Dict[str, Any]:
+    from datetime import datetime
+    now_str = datetime.now().strftime("%A, %B %d, %Y %I:%M:%S %p")
+    return {"ok": True, "result": f"Current system time is {now_str}"}
+
+def _handle_run_terminal_command(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import claw_developer
+        return claw_developer.run_terminal_command(args.get("command", ""), cwd=args.get("cwd"))
+    except Exception as e:
+        return {"ok": False, "error": f"Terminal execution failed: {e}"}
+
+def _handle_patch_code_file(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import claw_developer
+        return claw_developer.patch_file(args.get("file_path", ""), args.get("search_content", ""), args.get("replace_content", ""))
+    except Exception as e:
+        return {"ok": False, "error": f"Patching failed: {e}"}
+
+def _handle_git_automate(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import claw_developer
+        return claw_developer.git_automate(args.get("action", "status"), message=args.get("message"), cwd=args.get("cwd"))
+    except Exception as e:
+        return {"ok": False, "error": f"Git automation failed: {e}"}
+
+def _handle_run_unit_tests(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import claw_developer
+        return claw_developer.run_unit_tests(args.get("framework", "pytest"), path=args.get("path"), cwd=args.get("cwd"))
+    except Exception as e:
+        return {"ok": False, "error": f"Test runner failed: {e}"}
+
+def _handle_debug_code_file(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import claw_developer
+        return claw_developer.debug_file(args.get("file_path", ""), error_trace=args.get("error_trace"), instructions=args.get("instructions"))
+    except Exception as e:
+        return {"ok": False, "error": f"Debugging failed: {e}"}
+
+def _handle_export_project_starter(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import project_exporter
+        return project_exporter.export_project_starter(args.get("project_type", "react_vite"), destination_dir=args.get("destination_dir"))
+    except Exception as e:
+        return {"ok": False, "error": f"Project starter export failed: {e}"}
+
+def _handle_export_workspace_zip(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import project_exporter
+        return project_exporter.export_workspace_zip(output_path=args.get("output_path"))
+    except Exception as e:
+        return {"ok": False, "error": f"Workspace zip export failed: {e}"}
+
+def _handle_search_obsidian_notes(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import obsidian_rag
+        q = args.get("query", "")
+        notes = obsidian_rag.search_notes(q)
+        if not notes:
+            return {"ok": True, "result": f"No notes found matching '{q}' in Obsidian Vault."}
+        return {"ok": True, "result": notes}
+    except Exception as e:
+        return {"ok": False, "error": f"Obsidian search error: {e}"}
+
+def _handle_read_obsidian_note(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import obsidian_rag
+        return {"ok": True, "result": obsidian_rag.read_note(args.get("note_name", ""))}
+    except Exception as e:
+        return {"ok": False, "error": f"Obsidian read error: {e}"}
+
+def _handle_write_obsidian_note(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import obsidian_rag
+        return {"ok": True, "result": obsidian_rag.write_note(args.get("note_name", ""), args.get("content", ""))}
+    except Exception as e:
+        return {"ok": False, "error": f"Obsidian write error: {e}"}
+
+def _handle_get_weather(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.weather_report import weather_action
+        city = args.get("city", "Pune")
+        return {"ok": True, "result": weather_action({"city": city})}
+    except Exception as e:
+        return {"ok": False, "error": f"Weather fetch error: {e}"}
+
+def _handle_morning_briefing(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.morning_briefer import morning_briefer
+        res = morning_briefer({'action': args.get('action', 'briefing'), 'hour': args.get('hour', 8), 'minute': args.get('minute', 0)})
+        return {"ok": True, "result": res}
+    except Exception as e:
+        return {"ok": False, "error": f"Morning briefing error: {e}"}
+
+def _handle_media_control(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.media_controller import execute_media_control
+        action = args.get("action", "play_pause")
+        action_map = {'play_pause': 'play', 'previous': 'prev', 'stop': 'pause'}
+        action = action_map.get(action.lower(), action.lower())
+        return {"ok": True, "result": execute_media_control(action)}
+    except Exception as e:
+        return {"ok": False, "error": f"Media control error: {e}"}
+
+def _handle_spotify_control(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.spotify_helper import execute_spotify_command
+        cmd = args.get("command", "")
+        action = cmd
+        query = ""
+        if cmd.lower().startswith('play '):
+            action = 'play'
+            query = cmd[5:].strip()
+        elif cmd.lower().startswith('search '):
+            action = 'search'
+            query = cmd[7:].strip()
+        
+        if query:
+            res = execute_spotify_command(action, query=query)
+        else:
+            res = execute_spotify_command(action)
+        return {"ok": True, "result": res}
+    except Exception as e:
+        return {"ok": False, "error": f"Spotify control error: {e}"}
+
+def _handle_quick_note(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.computer_settings import add_note
+        text = args.get("text", "")
+        add_note(text)
+        return {"ok": True, "result": f"Note saved: {text}"}
+    except Exception as e:
+        return {"ok": False, "error": f"Note save error: {e}"}
+
+def _handle_operator_control(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from prime_operator import operator
+        act = str(args.get("action", "status")).lower().strip()
+        if act in ("enable", "on", "1", "true"):
+            operator.set_enabled(True)
+            return {"ok": True, "result": "Proactive Autonomous Operator enabled."}
+        elif act in ("disable", "off", "0", "false"):
+            operator.set_enabled(False)
+            return {"ok": True, "result": "Proactive Autonomous Operator disabled."}
+        else:
+            st = operator.get_status()
+            return {"ok": True, "result": f"Operator running: {st['running']}, Enabled: {st['enabled']}, RAM: {st['ram_percent']}%, Battery: {st['battery']}"}
+    except Exception as e:
+        return {"ok": False, "error": f"Operator control error: {e}"}
+
+
+BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
+    "getCurrentTime": _handle_time,
+    "getTime": _handle_time,
+    "currentTime": _handle_time,
+    "get_current_time": _handle_time,
+    "runTerminalCommand": _handle_run_terminal_command,
+    "patchCodeFile": _handle_patch_code_file,
+    "gitAutomate": _handle_git_automate,
+    "runUnitTests": _handle_run_unit_tests,
+    "debugCodeFile": _handle_debug_code_file,
+    "exportProjectStarter": _handle_export_project_starter,
+    "exportWorkspaceZip": _handle_export_workspace_zip,
+    "searchObsidianNotes": _handle_search_obsidian_notes,
+    "readObsidianNote": _handle_read_obsidian_note,
+    "writeObsidianNote": _handle_write_obsidian_note,
+    "getWeather": _handle_get_weather,
+    "morningBriefing": _handle_morning_briefing,
+    "mediaControl": _handle_media_control,
+    "spotifyControl": _handle_spotify_control,
+    "quickNote": _handle_quick_note,
+    "operatorControl": _handle_operator_control,
+}
+
+
 def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     """Execute a tool handler and return structured result."""
     args = args or {}
@@ -748,202 +926,38 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         except Exception:
             pass
 
-    if name in ("getCurrentTime", "getTime", "currentTime", "get_current_time"):
-        from datetime import datetime
-        now_str = datetime.now().strftime("%A, %B %d, %Y %I:%M:%S %p")
-        return {"ok": True, "result": f"Current system time is {now_str}"}
+    # 1. Check Built-in specialized handlers ($O(1)$)
+    builtin_handler = BUILTIN_TOOL_DISPATCH.get(name)
+    if not builtin_handler:
+        # Case-insensitive fallback
+        name_lower = name.lower()
+        for k, v in BUILTIN_TOOL_DISPATCH.items():
+            if k.lower() == name_lower:
+                builtin_handler = v
+                break
 
-    # Handle Claw Code Developer Engine
-    if name == "runTerminalCommand":
-        try:
-            import claw_developer
-            cmd = args.get("command", "")
-            cwd = args.get("cwd")
-            return claw_developer.run_terminal_command(cmd, cwd=cwd)
-        except Exception as e:
-            return {"ok": False, "error": f"Terminal execution failed: {e}"}
+    if builtin_handler:
+        return builtin_handler(args)
 
-    elif name == "patchCodeFile":
+    # 2. Check Desktop Agent tools ($O(1)$)
+    if name in TOOLS:
+        handler = TOOLS[name]
         try:
-            import claw_developer
-            fp = args.get("file_path", "")
-            sc = args.get("search_content", "")
-            rc = args.get("replace_content", "")
-            return claw_developer.patch_file(fp, sc, rc)
-        except Exception as e:
-            return {"ok": False, "error": f"Patching failed: {e}"}
-
-    elif name == "gitAutomate":
-        try:
-            import claw_developer
-            act = args.get("action", "status")
-            msg = args.get("message")
-            cwd = args.get("cwd")
-            return claw_developer.git_automate(act, message=msg, cwd=cwd)
-        except Exception as e:
-            return {"ok": False, "error": f"Git automation failed: {e}"}
-
-    elif name == "runUnitTests":
-        try:
-            import claw_developer
-            fw = args.get("framework", "pytest")
-            path = args.get("path")
-            cwd = args.get("cwd")
-            return claw_developer.run_unit_tests(fw, path=path, cwd=cwd)
-        except Exception as e:
-            return {"ok": False, "error": f"Test runner failed: {e}"}
-
-    elif name == "debugCodeFile":
-        try:
-            import claw_developer
-            fp = args.get("file_path", "")
-            et = args.get("error_trace")
-            ins = args.get("instructions")
-            return claw_developer.debug_file(fp, error_trace=et, instructions=ins)
-        except Exception as e:
-            return {"ok": False, "error": f"Debugging failed: {e}"}
-
-    # Handle IP-Codemaker Project Exporter
-    elif name == "exportProjectStarter":
-        try:
-            import project_exporter
-            pt = args.get("project_type", "react_vite")
-            dest = args.get("destination_dir")
-            return project_exporter.export_project_starter(pt, destination_dir=dest)
-        except Exception as e:
-            return {"ok": False, "error": f"Project starter export failed: {e}"}
-
-    elif name == "exportWorkspaceZip":
-        try:
-            import project_exporter
-            op = args.get("output_path")
-            return project_exporter.export_workspace_zip(output_path=op)
-        except Exception as e:
-            return {"ok": False, "error": f"Workspace zip export failed: {e}"}
-
-    # Handle SAT / Obsidian / Morning Briefing / Weather actions
-    elif name == "searchObsidianNotes":
-        try:
-            import obsidian_rag
-            q = args.get("query", "")
-            notes = obsidian_rag.search_notes(q)
-            if not notes:
-                return {"ok": True, "result": f"No notes found matching '{q}' in Obsidian Vault."}
-            return {"ok": True, "result": notes}
-        except Exception as e:
-            return {"ok": False, "error": f"Obsidian search error: {e}"}
-
-    elif name == "readObsidianNote":
-        try:
-            import obsidian_rag
-            n = args.get("note_name", "")
-            content = obsidian_rag.read_note(n)
-            return {"ok": True, "result": content}
-        except Exception as e:
-            return {"ok": False, "error": f"Obsidian read error: {e}"}
-
-    elif name == "writeObsidianNote":
-        try:
-            import obsidian_rag
-            n = args.get("note_name", "")
-            c = args.get("content", "")
-            res = obsidian_rag.write_note(n, c)
+            res = handler(args)
+            if isinstance(res, dict) and list(res.keys()) == ['result']:
+                res = res['result']
             return {"ok": True, "result": res}
+        except ToolError as e:
+            return {"ok": False, "error": e.message}
         except Exception as e:
-            return {"ok": False, "error": f"Obsidian write error: {e}"}
+            log.exception("Tool execution error in %s", name)
+            return {"ok": False, "error": str(e)}
 
-    elif name == "getWeather":
-        try:
-            from actions.weather_report import weather_action
-            city = args.get("city", "Pune")
-            res = weather_action({"city": city})
-            return {"ok": True, "result": res}
-        except Exception as e:
-            return {"ok": False, "error": f"Weather fetch error: {e}"}
+    # 3. Check Dynamic Plugin Registry
+    if registry.has_tool(name):
+        return registry.execute(name, args)
 
-    elif name == "morningBriefing":
-        try:
-            from actions.morning_briefer import morning_briefer
-            res = morning_briefer({'action': args.get('action', 'briefing'), 'hour': args.get('hour', 8), 'minute': args.get('minute', 0)})
-            return {"ok": True, "result": res}
-        except Exception as e:
-            return {"ok": False, "error": f"Morning briefing error: {e}"}
-
-    # Handle IP-Prime action modules
-    elif name == "mediaControl":
-        try:
-            from actions.media_controller import execute_media_control
-            action = args.get("action", "play_pause")
-            action_map = {'play_pause': 'play', 'previous': 'prev', 'stop': 'pause'}
-            action = action_map.get(action.lower(), action.lower())
-            res = execute_media_control(action)
-            return {"ok": True, "result": res}
-        except Exception as e:
-            return {"ok": False, "error": f"Media control error: {e}"}
-
-    elif name == "spotifyControl":
-        try:
-            from actions.spotify_helper import execute_spotify_command
-            cmd = args.get("command", "")
-            action = cmd
-            query = ""
-            if cmd.lower().startswith('play '):
-                action = 'play'
-                query = cmd[5:].strip()
-            elif cmd.lower().startswith('search '):
-                action = 'search'
-                query = cmd[7:].strip()
-            
-            if query:
-                res = execute_spotify_command(action, query=query)
-            else:
-                res = execute_spotify_command(action)
-            return {"ok": True, "result": res}
-        except Exception as e:
-            return {"ok": False, "error": f"Spotify control error: {e}"}
-
-    elif name == "quickNote":
-        try:
-            from actions.computer_settings import add_note
-            text = args.get("text", "")
-            res = add_note(text)
-            return {"ok": True, "result": f"Note saved: {text}"}
-        except Exception as e:
-            return {"ok": False, "error": f"Note save error: {e}"}
-
-    elif name == "operatorControl":
-        try:
-            from prime_operator import operator
-            act = str(args.get("action", "status")).lower().strip()
-            if act in ("enable", "on", "1", "true"):
-                operator.set_enabled(True)
-                return {"ok": True, "result": "Proactive Autonomous Operator enabled."}
-            elif act in ("disable", "off", "0", "false"):
-                operator.set_enabled(False)
-                return {"ok": True, "result": "Proactive Autonomous Operator disabled."}
-            else:
-                st = operator.get_status()
-                return {"ok": True, "result": f"Operator running: {st['running']}, Enabled: {st['enabled']}, RAM: {st['ram_percent']}%, Battery: {st['battery']}"}
-        except Exception as e:
-            return {"ok": False, "error": f"Operator control error: {e}"}
-
-    # Handle desktop_agent tools
-    if name not in TOOLS:
-        if registry.has_tool(name):
-            return registry.execute(name, args)
-        return {"ok": False, "error": f"Tool '{name}' not found."}
-
-    handler = TOOLS[name]
-    try:
-        res = handler(args)
-        if isinstance(res, dict) and list(res.keys()) == ['result']:
-            res = res['result']
-        return {"ok": True, "result": res}
-    except ToolError as e:
-        return {"ok": False, "error": e.message}
-    except Exception as e:
-        log.exception("Tool execution error in %s", name)
-        return {"ok": False, "error": str(e)}
+    return {"ok": False, "error": f"Tool '{name}' not found."}
 
 
 def get_openai_tools() -> List[Dict[str, Any]]:

@@ -250,8 +250,8 @@ def run_voice_loop():
     recognizer = sr.Recognizer()
     recognizer.dynamic_energy_threshold = False
     recognizer.energy_threshold = 250
-    recognizer.pause_threshold = 0.6
-    recognizer.non_speaking_duration = 0.3
+    recognizer.pause_threshold = 0.45
+    recognizer.non_speaking_duration = 0.2
 
     # Dynamic personalized welcome announcement in Charon voice
     welcome_msg = get_dynamic_welcome_message()
@@ -264,7 +264,7 @@ def run_voice_loop():
     speaking_start_time = None
     with sr.Microphone(device_index=mic_idx) as source:
         try:
-            recognizer.adjust_for_ambient_noise(source, duration=0.6)
+            recognizer.adjust_for_ambient_noise(source, duration=0.5)
             recognizer.energy_threshold = min(max(recognizer.energy_threshold, 150), 350)
         except Exception:
             recognizer.energy_threshold = 250
@@ -293,7 +293,7 @@ def run_voice_loop():
 
                 if speaking_start_time is not None:
                     speaking_start_time = None
-                    time.sleep(0.3)
+                    time.sleep(0.15)
 
                 audio = recognizer.listen(source, timeout=8, phrase_time_limit=14)
 

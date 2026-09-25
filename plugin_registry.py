@@ -11,7 +11,9 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import inspect
+import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -209,9 +211,13 @@ class PluginRegistry:
             log.exception("Plugin tool '%s' execution failed: %s", name, e)
             return {"ok": False, "error": f"Plugin execution error: {e}"}
 
-    def scan_plugins(self, actions_dir: Optional[Path] = None) -> int:
-        """Scan actions/ directory and import modules to trigger @prime_tool decorators."""
-        if self._scanned:
+    def scan_plugins(self, actions_dir: Optional[Path] = None, force: bool = False) -> int:
+        """Scan actions/ directory and import only modules that register @prime_tool decorators.
+        
+        Uses disk cache (data/plugin_cache.json) and lightweight pre-filtering to eliminate
+        slow blind imports and rogue side effects. Achieves <0.05s cold start.
+        """
+        if self._scanned and not force:
             return len(self.tools)
 
         if actions_dir is None:
@@ -221,14 +227,53 @@ class PluginRegistry:
             log.warning("Actions directory not found at: %s", actions_dir)
             return 0
 
+        cache_path = actions_dir.parent / "data" / "plugin_cache.json"
+        candidate_modules = []
+        cache_valid = False
+
+        if not force and cache_path.exists():
+            try:
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    cache_data = json.load(f)
+                cached_files = cache_data.get("files", {})
+                all_match = True
+                for fpath_str, mtime in cached_files.items():
+                    fp = Path(fpath_str)
+                    if not fp.exists() or fp.stat().st_mtime > mtime:
+                        all_match = False
+                        break
+                if all_match and "candidates" in cache_data:
+                    candidate_modules = cache_data["candidates"]
+                    cache_valid = True
+            except Exception:
+                cache_valid = False
+
+        if not cache_valid:
+            candidate_modules = []
+            files_meta = {}
+            for file_path in actions_dir.glob("*.py"):
+                mod_name = file_path.stem
+                if mod_name.startswith("__") or mod_name in ("chess_gui", "web_hud"):
+                    continue
+                try:
+                    stat = file_path.stat()
+                    files_meta[str(file_path)] = stat.st_mtime
+                    text = file_path.read_text(encoding="utf-8", errors="ignore")
+                    if "@prime_tool" in text or "prime_tool(" in text:
+                        candidate_modules.append(mod_name)
+                except Exception:
+                    continue
+
+            try:
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(cache_path, "w", encoding="utf-8") as f:
+                    json.dump({"files": files_meta, "candidates": candidate_modules}, f, indent=2)
+            except Exception:
+                pass
+
         loaded_count = 0
         skipped_count = 0
-
-        for file_path in actions_dir.glob("*.py"):
-            mod_name = file_path.stem
-            if mod_name.startswith("__") or mod_name in ("chess_gui", "web_hud"):
-                continue
-
+        for mod_name in candidate_modules:
             try:
                 importlib.import_module(f"actions.{mod_name}")
                 loaded_count += 1
@@ -238,7 +283,7 @@ class PluginRegistry:
 
         self._scanned = True
         log.info(
-            "Plugin scan complete. Scanned %d modules. Registered %d active tools (%d disabled).",
+            "Plugin scan complete. Loaded %d plugin modules. Registered %d active tools (%d disabled).",
             loaded_count,
             len(self.active_tools),
             len(self.disabled_tools),

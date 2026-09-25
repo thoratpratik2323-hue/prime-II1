@@ -567,8 +567,8 @@ def _ambient_voice_worker():
     r = sr.Recognizer()
     r.dynamic_energy_threshold = False
     r.energy_threshold = 220
-    r.pause_threshold = 0.6
-    r.non_speaking_duration = 0.3
+    r.pause_threshold = 0.45
+    r.non_speaking_duration = 0.2
 
     speaking_start_time = None
 
@@ -578,7 +578,7 @@ def _ambient_voice_worker():
             mode_desc = "Say 'Prime ...' to command" if req_ww else "Speak commands anytime, hands-free"
             console.print(f"  [bold bright_green]● WAKE WORD LISTENER LIVE[/bold bright_green] [dim]— {mode_desc}[/dim]\n")
             try:
-                r.adjust_for_ambient_noise(source, duration=0.6)
+                r.adjust_for_ambient_noise(source, duration=0.5)
                 r.energy_threshold = min(max(r.energy_threshold, 150), 350)
             except Exception:
                 r.energy_threshold = 220
@@ -591,12 +591,12 @@ def _ambient_voice_worker():
                         elif time.time() - speaking_start_time > 60:
                             voice._is_speaking = False
                             speaking_start_time = None
-                        time.sleep(0.15)
+                        time.sleep(0.12)
                         continue
 
                     if speaking_start_time is not None:
                         speaking_start_time = None
-                        time.sleep(0.3)
+                        time.sleep(0.15)
 
                     try:
                         audio = r.listen(source, timeout=3, phrase_time_limit=12)

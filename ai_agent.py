@@ -291,30 +291,14 @@ class AIAgent:
         from google.genai import types
 
         try:
-            # Using send_message_stream for instantaneous response streaming
-            stream = self._gemini_chat.send_message_stream(user_input)
+            resp = self._gemini_chat.send_message(user_input)
+            function_calls = getattr(resp, "function_calls", None)
 
-            first_chunk = None
-            for chunk in stream:
-                first_chunk = chunk
-                break
-
-            function_calls = getattr(first_chunk, "function_calls", None) if first_chunk else None
-
-            # Path A: Direct conversational response without tools (instant streaming TTS!)
+            # Path A: Direct conversational response without tools
             if not function_calls:
-                def token_stream():
-                    if first_chunk and getattr(first_chunk, "text", None):
-                        yield first_chunk.text
-                    for chunk in stream:
-                        txt = getattr(chunk, "text", "") or ""
-                        if txt:
-                            yield txt
-
-                if voice.tts_enabled:
-                    final_text = voice.speak_streamed(token_stream())
-                else:
-                    final_text = "".join(token_stream())
+                final_text = resp.text or ""
+                if voice.tts_enabled and final_text:
+                    voice.speak(final_text)
                 return final_text.strip()
 
             # Path B: Tool calling loop
@@ -341,31 +325,16 @@ class AIAgent:
                         response={"result": exec_res.get("result", exec_res)},
                     ))
 
-                # Stream tool response
-                stream = self._gemini_chat.send_message_stream(tool_results)
-                first_chunk = None
-                for chunk in stream:
-                    first_chunk = chunk
-                    break
-
-                next_calls = getattr(first_chunk, "function_calls", None) if first_chunk else None
+                # Send tool responses turn
+                resp = self._gemini_chat.send_message(tool_results)
+                next_calls = getattr(resp, "function_calls", None)
                 if next_calls:
                     current_calls = next_calls
                     continue
                 else:
-                    # Final text stream after tool execution
-                    def token_stream():
-                        if first_chunk and getattr(first_chunk, "text", None):
-                            yield first_chunk.text
-                        for chunk in stream:
-                            txt = getattr(chunk, "text", "") or ""
-                            if txt:
-                                yield txt
-
-                    if voice.tts_enabled:
-                        final_text = voice.speak_streamed(token_stream())
-                    else:
-                        final_text = "".join(token_stream())
+                    final_text = resp.text or ""
+                    if voice.tts_enabled and final_text:
+                        voice.speak(final_text)
                     return final_text.strip()
 
             return "Tool operations completed, Sir."

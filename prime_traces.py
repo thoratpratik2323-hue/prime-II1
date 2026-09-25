@@ -79,6 +79,7 @@ class TraceLogger:
         try:
             with open(TRACES_FILE, "a", encoding="utf-8") as f:
                 f.write(json.dumps(trace, ensure_ascii=False) + "\n")
+            self._maybe_compact_traces()
         except Exception:
             pass
 
@@ -87,6 +88,21 @@ class TraceLogger:
             self._auto_reflect_on_failure(trace)
 
         return trace
+
+    def _maybe_compact_traces(self) -> None:
+        """Compact trace file if it exceeds 2MB, keeping last 1,000 entries."""
+        try:
+            if not TRACES_FILE.exists() or TRACES_FILE.stat().st_size < 2 * 1024 * 1024:
+                return
+            from collections import deque
+            with open(TRACES_FILE, "r", encoding="utf-8", errors="ignore") as f:
+                recent = deque(f, maxlen=1000)
+            temp_file = TRACES_FILE.with_suffix(".tmp")
+            with open(temp_file, "w", encoding="utf-8") as f:
+                f.writelines(recent)
+            temp_file.replace(TRACES_FILE)
+        except Exception:
+            pass
 
     def _auto_reflect_on_failure(self, trace: Dict[str, Any]) -> None:
         """Extract a lesson and save to continual harness."""
@@ -101,14 +117,15 @@ class TraceLogger:
             pass
 
     def get_recent_traces(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """Retrieve recent execution traces."""
+        """Retrieve recent execution traces using bounded streaming deque."""
         if not TRACES_FILE.exists():
             return []
         traces = []
         try:
-            with open(TRACES_FILE, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-                for line in lines[-limit:]:
+            from collections import deque
+            with open(TRACES_FILE, "r", encoding="utf-8", errors="ignore") as f:
+                tail = deque(f, maxlen=limit)
+                for line in tail:
                     line = line.strip()
                     if line:
                         traces.append(json.loads(line))
