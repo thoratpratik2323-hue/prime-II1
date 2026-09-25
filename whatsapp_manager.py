@@ -147,22 +147,96 @@ def is_whatsapp_desktop_running() -> bool:
     return False
 
 
+def launch_on_interactive_desktop(cmd: str) -> bool:
+    """Spawns an application directly onto the user's physical interactive screen (WinSta0\\Default)."""
+    if platform.system() != "Windows":
+        try:
+            subprocess.Popen(cmd, shell=True)
+            return True
+        except Exception:
+            return False
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class STARTUPINFO(ctypes.Structure):
+            _fields_ = [
+                ('cb', wintypes.DWORD),
+                ('lpReserved', wintypes.LPWSTR),
+                ('lpDesktop', wintypes.LPWSTR),
+                ('lpTitle', wintypes.LPWSTR),
+                ('dwX', wintypes.DWORD),
+                ('dwY', wintypes.DWORD),
+                ('dwXSize', wintypes.DWORD),
+                ('dwYSize', wintypes.DWORD),
+                ('dwXCountChars', wintypes.DWORD),
+                ('dwYCountChars', wintypes.DWORD),
+                ('dwFillAttribute', wintypes.DWORD),
+                ('dwFlags', wintypes.DWORD),
+                ('wShowWindow', wintypes.WORD),
+                ('cbReserved2', wintypes.WORD),
+                ('lpReserved2', ctypes.c_char_p),
+                ('hStdInput', wintypes.HANDLE),
+                ('hStdOutput', wintypes.HANDLE),
+                ('hStdError', wintypes.HANDLE),
+            ]
+
+        class PROCESS_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ('hProcess', wintypes.HANDLE),
+                ('hThread', wintypes.HANDLE),
+                ('dwProcessId', wintypes.DWORD),
+                ('dwThreadId', wintypes.DWORD),
+            ]
+
+        si = STARTUPINFO()
+        si.cb = ctypes.sizeof(STARTUPINFO)
+        si.lpDesktop = r"WinSta0\Default"
+
+        pi = PROCESS_INFORMATION()
+
+        k32 = ctypes.windll.kernel32
+        res = k32.CreateProcessW(
+            None,
+            cmd,
+            None,
+            None,
+            False,
+            0,
+            None,
+            None,
+            ctypes.byref(si),
+            ctypes.byref(pi)
+        )
+        if res:
+            k32.CloseHandle(pi.hProcess)
+            k32.CloseHandle(pi.hThread)
+            return True
+    except Exception as e:
+        log.debug("Interactive desktop launch error: %s", e)
+
+    try:
+        subprocess.Popen(cmd, shell=True)
+        return True
+    except Exception:
+        return False
+
+
 def send_via_desktop_protocol(phone_number: str, message: str) -> Dict[str, Any]:
-    """Send message via the official Windows whatsapp:// protocol handler."""
+    """Send message via the official Windows whatsapp:// protocol handler on user's desktop."""
     clean_num = phone_number.replace("+", "")
     encoded_msg = urllib.parse.quote(message)
     uri = f"whatsapp://send?phone={clean_num}&text={encoded_msg}"
 
     try:
         if platform.system() == "Windows":
-            # Launch via shell
-            os.startfile(uri)
+            launch_on_interactive_desktop(f'explorer.exe "{uri}"')
             time.sleep(1.8)
 
             # Auto-press Enter to send if pyautogui is available
             try:
                 import pyautogui
-                # Bring WhatsApp to front
                 pyautogui.press("enter")
                 time.sleep(0.3)
                 pyautogui.press("enter")
@@ -192,7 +266,7 @@ class WhatsAppWebService:
         self._lock = threading.Lock()
 
     def launch_setup_window(self) -> Dict[str, Any]:
-        """Launch a dedicated Chrome window to allow the user to scan the QR code once."""
+        """Launch a dedicated Chrome window on the user's physical screen to allow QR code scanning."""
         chrome_exe = None
         for p in [
             r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -204,21 +278,18 @@ class WhatsAppWebService:
                 break
 
         if chrome_exe:
-            cmd = [
-                chrome_exe,
-                f"--user-data-dir={str(self.session_path)}",
-                "--app=https://web.whatsapp.com",
-            ]
-            subprocess.Popen(
-                cmd,
-                creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
-                | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
-                close_fds=True,
-            )
+            cmd = f'"{chrome_exe}" --new-window "https://web.whatsapp.com"'
+            launch_on_interactive_desktop(cmd)
             return {
                 "ok": True,
-                "result": "Opened WhatsApp Web in a clean Chrome window. Please scan the QR code using WhatsApp on your phone (Linked Devices -> Link a Device). Once scanned, your session will be permanently linked to Prime!"
+                "result": "Opened WhatsApp Web on your physical display. Please scan the QR code using WhatsApp on your phone (Linked Devices -> Link a Device). Once scanned, your session will be permanently linked to Prime!"
             }
+
+        launch_on_interactive_desktop('explorer.exe "https://web.whatsapp.com"')
+        return {
+            "ok": True,
+            "result": "Opened WhatsApp Web in your default browser. Please scan the QR code on screen."
+        }
 
         # Fallback to Playwright
         def _run():
