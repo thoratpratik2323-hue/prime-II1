@@ -300,6 +300,12 @@ class PredictiveContextEngine:
                 lines.append(f"- Relevant Obsidian Knowledge: {', '.join(ctx.get('obsidian_related_notes', []))}")
             return "\n".join(lines)
 
+    def get_current_context(self) -> Dict[str, Any]:
+        """Return the dictionary representation of the active project context."""
+        with self._lock:
+            return dict(self._cached_project_context)
+
+
 
 # Singleton instance
 from voice_engine import voice
