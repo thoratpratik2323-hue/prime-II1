@@ -119,7 +119,7 @@ class Config:
             return "deepseek-chat"
         if provider == "openai":
             return "gpt-4o-mini"
-        return "gemini-2.5-flash"
+        return "gemini-3.1-flash-lite"
 
     def set_api_key(self, provider: str, key: str) -> None:
         """Update and persist an API key to the .env file."""

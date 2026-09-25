@@ -159,10 +159,28 @@ def resolve_recipient(target: str) -> Tuple[Optional[str], str]:
     if target_lower in contacts:
         return contacts[target_lower], target_clean
 
-    # Fuzzy check in contacts
+    # Clean repeated words / speech recognition stutter (e.g. "om om" -> "om")
+    words = [w for w in target_lower.split() if w not in ("to", "tu", "ko", "se", "send", "message", "msg")]
+    for w in words:
+        if w in contacts:
+            return contacts[w], w.title()
+
+    # Check exact word boundaries
+    for name, num in contacts.items():
+        if f" {name} " in f" {target_lower} " or f" {target_lower} " in f" {name} ":
+            return num, name.title()
+
+    # Substring check in contacts
     for name, num in contacts.items():
         if target_lower in name or name in target_lower:
             return num, name.title()
+
+    # Difflib close match
+    import difflib
+    close = difflib.get_close_matches(target_lower, list(contacts.keys()), n=1, cutoff=0.7)
+    if close:
+        matched = close[0]
+        return contacts[matched], matched.title()
 
     # Check if target is directly a phone number
     if re.search(r"\d{7,}", target_clean):

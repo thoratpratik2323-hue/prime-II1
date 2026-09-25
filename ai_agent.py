@@ -140,7 +140,9 @@ class AIAgent:
 
                 self._gemini_client = genai.Client(api_key=config.gemini_api_key, http_options={"timeout": 12000})
                 preferred = config.get_default_model("gemini")
-                models_to_try = [preferred] + ([ "gemini-2.5-flash" ] if preferred != "gemini-2.5-flash" else [])
+                candidates = [preferred, "gemini-3.1-flash-lite", "gemini-flash-lite-latest"]
+                seen = set()
+                models_to_try = [m for m in candidates if not (m in seen or seen.add(m))]
                 
                 self._gemini_chat = None
                 for m in models_to_try:
@@ -237,7 +239,9 @@ class AIAgent:
         provider = config.get_active_provider()
 
         # 1. If provider is Gemini
-        if provider in ("gemini", "google") and self._gemini_chat is not None:
+        now = time.time()
+        gemini_cooldown = getattr(self, "_gemini_quota_exhausted_until", 0)
+        if provider in ("gemini", "google") and self._gemini_chat is not None and now > gemini_cooldown:
             res = self._process_gemini(user_input, on_tool_call, logged_tool_result)
             if res != "__GEMINI_EXHAUSTED__":
                 trace_logger.end_trace(active_trace, response=res)
@@ -348,23 +352,28 @@ class AIAgent:
 
             return "Tool operations completed, Sir."
         except Exception as e:
+            err_str = str(e)
             log.warning("Gemini chat error: %s. Initiating fast failover...", e)
-            # Try single fast failover to gemini-2.5-flash if we weren't already using it
-            if getattr(self, "_current_gemini_model", "") != "gemini-2.5-flash":
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                # Back off Gemini for 60 seconds to route directly to Groq without stalling user turns
+                self._gemini_quota_exhausted_until = time.time() + 60.0
+
+            # Try single fast failover to gemini-3.1-flash-lite if we weren't already using it and not rate-limited
+            if "429" not in err_str and getattr(self, "_current_gemini_model", "") != "gemini-3.1-flash-lite":
                 try:
-                    log.info("Failing over directly to Gemini 2.5 Flash...")
+                    log.info("Failing over directly to Gemini 3.1 Flash Lite...")
                     self._gemini_chat = self._gemini_client.chats.create(
-                        model="gemini-2.5-flash",
+                        model="gemini-3.1-flash-lite",
                         config=types.GenerateContentConfig(
                             system_instruction=self.get_system_prompt(),
                             tools=get_gemini_tools(),
                             temperature=0.7,
                         ),
                     )
-                    self._current_gemini_model = "gemini-2.5-flash"
+                    self._current_gemini_model = "gemini-3.1-flash-lite"
                     return self._process_gemini(user_input, on_tool_call, on_tool_result)
                 except Exception as fb_err:
-                    log.warning("Fast failover to Gemini 2.5 Flash failed: %s", fb_err)
+                    log.warning("Fast failover to Gemini 3.1 Flash Lite failed: %s", fb_err)
 
             # Gemini models exhausted or timed out
             log.info("Gemini exhausted/timed-out. Routing to ultra-fast provider fallback...")
