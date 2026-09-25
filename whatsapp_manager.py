@@ -385,6 +385,51 @@ class WhatsAppWebService:
 whatsapp_web = WhatsAppWebService()
 
 
+def send_via_contact_search(contact_name: str, message: str) -> Dict[str, Any]:
+    """
+    Search for a contact directly inside WhatsApp by their saved phone contact name (no phone number required),
+    selects the chat, and sends the message.
+    """
+    try:
+        import pyautogui
+        import pyperclip
+
+        # 1. Bring WhatsApp Desktop to front
+        launch_on_interactive_desktop('explorer.exe "whatsapp:"')
+        time.sleep(1.2)
+
+        # 2. Press Ctrl + N (New Chat) to immediately focus contact search
+        pyautogui.hotkey("ctrl", "n")
+        time.sleep(0.6)
+
+        # 3. Type contact name into the search box
+        pyperclip.copy(contact_name)
+        pyautogui.hotkey("ctrl", "v")
+        time.sleep(1.0)  # Wait for contact list to filter
+
+        # 4. Select top matched contact
+        pyautogui.press("down")
+        time.sleep(0.3)
+        pyautogui.press("enter")
+        time.sleep(0.8)
+
+        # 5. Type and send the message
+        pyperclip.copy(message)
+        pyautogui.hotkey("ctrl", "v")
+        time.sleep(0.4)
+        pyautogui.press("enter")
+
+        return {
+            "ok": True,
+            "message": f"WhatsApp message successfully sent to '{contact_name}' by searching WhatsApp contacts directly.",
+            "recipient": contact_name,
+            "method": "contact_name_search"
+        }
+    except Exception as e:
+        log.warning("WhatsApp contact search error: %s", e)
+        return {"ok": False, "error": f"Failed to send by contact search: {e}"}
+
+
 # =====================================================================
 # 4. Unified Entry Points
 # =====================================================================
@@ -392,22 +437,23 @@ whatsapp_web = WhatsAppWebService()
 def send_whatsapp(recipient: str, message: str) -> Dict[str, Any]:
     """
     Send WhatsApp message to recipient (name or phone number).
-    Uses Desktop App first if installed, falls back to Web.
+    If a phone number is provided (or resolved from contacts.json), uses direct protocol.
+    If only a contact name is provided, searches WhatsApp's saved contacts directly!
     """
     phone, display_name = resolve_recipient(recipient)
-    if not phone:
-        return {
-            "ok": False,
-            "error": f"Could not find contact '{recipient}' in contact book, and it does not appear to be a valid phone number. Please provide the 10-digit number or save the contact first."
-        }
 
-    log.info("Sending WhatsApp message to '%s' (%s): %s", display_name, phone, message[:50])
+    if phone:
+        log.info("Sending WhatsApp message to '%s' (%s): %s", display_name, phone, message[:50])
+        # Method 1: Desktop App if available
+        res = send_via_desktop_protocol(phone, message)
+        if res.get("ok"):
+            res["recipient"] = display_name
+            return res
 
-    # Method 1: Desktop App if available
-    res = send_via_desktop_protocol(phone, message)
-    if res.get("ok"):
-        res["recipient"] = display_name
-        return res
+        # Method 2: Web persistent session
+        return whatsapp_web.send_via_web(phone, message)
+    else:
+        # User gave a name saved in their phone's WhatsApp! Search and send directly!
+        log.info("Searching WhatsApp contacts directly for name '%s'...", recipient)
+        return send_via_contact_search(recipient, message)
 
-    # Method 2: Web persistent session
-    return whatsapp_web.send_via_web(phone, message)
