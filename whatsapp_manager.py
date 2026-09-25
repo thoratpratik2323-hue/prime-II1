@@ -192,7 +192,35 @@ class WhatsAppWebService:
         self._lock = threading.Lock()
 
     def launch_setup_window(self) -> Dict[str, Any]:
-        """Launch an interactive browser window to allow the user to scan the QR code once."""
+        """Launch a dedicated Chrome window to allow the user to scan the QR code once."""
+        chrome_exe = None
+        for p in [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        ]:
+            if os.path.exists(p):
+                chrome_exe = p
+                break
+
+        if chrome_exe:
+            cmd = [
+                chrome_exe,
+                f"--user-data-dir={str(self.session_path)}",
+                "--app=https://web.whatsapp.com",
+            ]
+            subprocess.Popen(
+                cmd,
+                creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+                close_fds=True,
+            )
+            return {
+                "ok": True,
+                "result": "Opened WhatsApp Web in a clean Chrome window. Please scan the QR code using WhatsApp on your phone (Linked Devices -> Link a Device). Once scanned, your session will be permanently linked to Prime!"
+            }
+
+        # Fallback to Playwright
         def _run():
             from playwright.sync_api import sync_playwright
             try:
@@ -200,34 +228,20 @@ class WhatsAppWebService:
                     browser = p.chromium.launch_persistent_context(
                         user_data_dir=str(self.session_path),
                         headless=False,
-                        channel="chrome",
-                        args=["--start-maximized", "--disable-blink-features=AutomationControlled"],
-                        viewport=None
+                        args=["--start-maximized"]
                     )
                     page = browser.pages[0] if browser.pages else browser.new_page()
                     page.goto("https://web.whatsapp.com", timeout=60000)
-                    log.info("WhatsApp Web setup window opened. Waiting for user QR scan...")
-
-                    # Wait up to 3 minutes for user to link device
-                    for _ in range(180):
-                        time.sleep(1.0)
-                        # Check if chats list or search bar is loaded
-                        is_logged_in = page.evaluate("""() => {
-                            return Boolean(document.querySelector('div[contenteditable="true"]') || document.querySelector('#pane-side'));
-                        }""")
-                        if is_logged_in:
-                            log.info("WhatsApp Web login detected successfully!")
-                            time.sleep(3)
-                            break
+                    time.sleep(120)
                     browser.close()
             except Exception as e:
                 log.error("WhatsApp setup error: %s", e)
 
-        t = threading.Thread(target=_run, daemon=True, name="WhatsAppSetupThread")
+        t = threading.Thread(target=_run, daemon=False, name="WhatsAppSetupThread")
         t.start()
         return {
             "ok": True,
-            "result": "Opened WhatsApp Web in Chrome. Please scan the QR code on screen using WhatsApp on your phone (Linked Devices -> Link a Device). Once scanned, Prime will have full persistent access!"
+            "result": "Opened WhatsApp Web. Please scan the QR code on screen using WhatsApp on your phone."
         }
 
     def send_via_web(self, phone_number: str, message: str) -> Dict[str, Any]:
