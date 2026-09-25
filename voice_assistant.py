@@ -202,21 +202,37 @@ def on_tool_result(name: str, result: dict):
 
 
 def find_best_mic_index() -> tuple[Optional[int], str]:
-    """Find the best active microphone on the system, prioritizing active headsets or system default."""
+    """Find the best active microphone on the system, verifying it has input channels and can open."""
     try:
-        mics = sr.Microphone.list_microphone_names()
+        import pyaudio
+        p = pyaudio.PyAudio()
+        input_devices = []
+        for i in range(p.get_device_count()):
+            try:
+                info = p.get_device_info_by_index(i)
+                if info.get("maxInputChannels", 0) > 0:
+                    name = info.get("name", "")
+                    input_devices.append((i, name))
+            except Exception:
+                pass
+        p.terminate()
     except Exception:
-        mics = []
+        input_devices = []
 
-    # Check if a bluetooth headset or dedicated microphone is connected
-    for idx, name in enumerate(mics):
+    # Check for connected bluetooth headset/mic in verified INPUT devices
+    for idx, name in input_devices:
         name_lower = name.lower()
-        if any(h in name_lower for h in ("headset", "bluetooth", "airbass", "ptron", "wireless", "airlits", "hands-free")):
-            return idx, name
+        if "output" in name_lower:
+            continue
+        if any(h in name_lower for h in ("headset", "bluetooth", "airbass", "ptron", "wireless", "airlits", "hands-free", "vivo")):
+            try:
+                with sr.Microphone(device_index=idx) as test_source:
+                    return idx, name
+            except Exception:
+                continue
 
     # Default to Windows System Default Recording Device (device_index=None)
-    default_name = mics[0] if mics else "System Default Microphone"
-    return None, f"System Default ({default_name})"
+    return None, "System Default (Windows Audio Mapper)"
 
 
 def run_voice_loop():
