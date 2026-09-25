@@ -39,4 +39,7 @@ scratch/prime-agent/
 data/mesh_token.json
 love_letter*.txt
 Desktop/Prime_*.txt
+data/whatsapp_session/
+data/contacts.json
+exports/*.zip
 

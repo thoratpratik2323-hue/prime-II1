@@ -702,6 +702,51 @@ TOOL_SPECS: List[Dict[str, Any]] = [
         "description": "Run autonomous self-diagnostic audit and self-healing across tools, memory, plugins, and providers.",
         "parameters": {"type": "object", "properties": {}}
     },
+    # WhatsApp Automation Engine
+    {
+        "name": "sendWhatsAppMessage",
+        "description": "Send a WhatsApp message to any contact name or phone number. Supports saved contacts (e.g. 'Mom', 'Rahul') or raw phone numbers with auto-formatting.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "recipient": {"type": "string", "description": "Contact name (e.g. 'Rahul', 'Mom') or phone number (e.g. '+919876543210' or '9876543210')."},
+                "message": {"type": "string", "description": "The exact message text to send."}
+            },
+            "required": ["recipient", "message"]
+        }
+    },
+    {
+        "name": "saveWhatsAppContact",
+        "description": "Save a contact name and phone number to the WhatsApp address book for quick messaging by name.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Contact name (e.g. 'Rahul', 'Boss', 'Pooja')."},
+                "phone_number": {"type": "string", "description": "10-digit or international phone number (e.g. '9876543210')."}
+            },
+            "required": ["name", "phone_number"]
+        }
+    },
+    {
+        "name": "listWhatsAppContacts",
+        "description": "List all saved contacts in the WhatsApp address book.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "setupWhatsAppWeb",
+        "description": "Launch the persistent WhatsApp Web browser setup window so the user can scan the QR code once to grant Prime full persistent background access to read chats and send messages.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "readWhatsAppChats",
+        "description": "Read recent chats and unread messages from WhatsApp Web in the background.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Number of recent chats to inspect. Defaults to 5."}
+            }
+        }
+    },
 ]
 
 
@@ -893,6 +938,55 @@ def _handle_self_healing_audit(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"Self-healing audit failed: {e}"}
 
 
+def _handle_send_whatsapp(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import send_whatsapp
+        recipient = str(args.get("recipient") or args.get("contact") or args.get("to") or args.get("phone") or "").strip()
+        message = str(args.get("message") or args.get("text") or args.get("body") or "").strip()
+        if not recipient or not message:
+            return {"ok": False, "error": "Both 'recipient' and 'message' are required."}
+        return send_whatsapp(recipient, message)
+    except Exception as e:
+        return {"ok": False, "error": f"WhatsApp transmission failed: {e}"}
+
+
+def _handle_save_whatsapp_contact(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import save_contact
+        name = str(args.get("name") or "").strip()
+        phone = str(args.get("phone_number") or args.get("phone") or args.get("number") or "").strip()
+        if not name or not phone:
+            return {"ok": False, "error": "Both 'name' and 'phone_number' are required."}
+        return save_contact(name, phone)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to save contact: {e}"}
+
+
+def _handle_list_whatsapp_contacts(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import list_contacts
+        return list_contacts()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to list contacts: {e}"}
+
+
+def _handle_setup_whatsapp_web(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import whatsapp_web
+        return whatsapp_web.launch_setup_window()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to launch WhatsApp Web setup: {e}"}
+
+
+def _handle_read_whatsapp_chats(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import whatsapp_web
+        limit = int(args.get("limit", 5))
+        return whatsapp_web.read_recent_unread_messages(limit=limit)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to read WhatsApp chats: {e}"}
+
+
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
     "getTime": _handle_time,
@@ -917,6 +1011,13 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "ambientVisionInspect": _handle_ambient_vision,
     "neuralMeshPair": _handle_neural_mesh_pair,
     "selfHealingAudit": _handle_self_healing_audit,
+    "sendWhatsAppMessage": _handle_send_whatsapp,
+    "sendWhatsApp": _handle_send_whatsapp,
+    "whatsappSend": _handle_send_whatsapp,
+    "saveWhatsAppContact": _handle_save_whatsapp_contact,
+    "listWhatsAppContacts": _handle_list_whatsapp_contacts,
+    "setupWhatsAppWeb": _handle_setup_whatsapp_web,
+    "readWhatsAppChats": _handle_read_whatsapp_chats,
 }
 
 
@@ -950,6 +1051,8 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         'patchCodeFile': [('path', 'file_path'), ('target', 'search_content'), ('replacement', 'replace_content')],
         'debugCodeFile': [('path', 'file_path'), ('trace', 'error_trace')],
         'runUnitTests': [('test_path', 'path')],
+        'sendWhatsAppMessage': [('to', 'recipient'), ('contact', 'recipient'), ('phone', 'recipient'), ('text', 'message'), ('body', 'message')],
+        'saveWhatsAppContact': [('phone', 'phone_number'), ('number', 'phone_number')],
     }
     for src, dst in arg_mappings.get(name, []):
         if src in args and dst not in args:
