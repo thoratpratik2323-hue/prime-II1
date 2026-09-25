@@ -298,7 +298,7 @@ def attach_thread_to_default_desktop() -> bool:
 
 
 def focus_whatsapp_window() -> bool:
-    """Finds and brings the native WhatsApp Desktop window to the foreground."""
+    """Finds and brings ANY active WhatsApp window (Chrome WhatsApp Web, Edge, or Desktop App) to the foreground."""
     if platform.system() != "Windows":
         return False
     try:
@@ -308,18 +308,25 @@ def focus_whatsapp_window() -> bool:
         hwnds = []
 
         def cb(h, _):
-            if win32gui.IsWindowVisible(h):
-                t = win32gui.GetWindowText(h)
-                c = win32gui.GetClassName(h)
-                if "whatsapp" in t.lower() and c != "Chrome_WidgetWin_1":
-                    hwnds.append(h)
+            t = win32gui.GetWindowText(h)
+            c = win32gui.GetClassName(h)
+            if "whatsapp" in t.lower() or "whatsapp" in c.lower():
+                hwnds.append(h)
             return True
 
         win32gui.EnumWindows(cb, None)
         if hwnds:
             hwnd = hwnds[0]
+            # Use AttachThreadInput to bypass Windows foreground activation lock
+            u32 = ctypes.windll.user32
+            curr_tid = ctypes.windll.kernel32.GetCurrentThreadId()
+            fore_hwnd = u32.GetForegroundWindow()
+            fore_tid = u32.GetWindowThreadProcessId(fore_hwnd, None)
+            u32.AttachThreadInput(curr_tid, fore_tid, True)
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-            win32gui.SetForegroundWindow(hwnd)
+            u32.SetForegroundWindow(hwnd)
+            u32.SetFocus(hwnd)
+            u32.AttachThreadInput(curr_tid, fore_tid, False)
             return True
     except Exception as e:
         log.debug("focus_whatsapp_window error: %s", e)
@@ -351,16 +358,22 @@ def send_via_desktop_protocol(phone_number: str, message: str) -> Dict[str, Any]
         if platform.system() == "Windows":
             # 1. Launch URI on interactive desktop
             launch_on_interactive_desktop(f'explorer.exe "{uri}"')
-            time.sleep(2.5)
+            time.sleep(3.0)
 
             # 2. Attach current thread to physical desktop and bring WhatsApp to foreground
             attach_thread_to_default_desktop()
             focus_whatsapp_window()
-            time.sleep(0.5)
+            time.sleep(0.8)
 
-            # 3. Simulate Enter key to send the typed message
+            # 3. Simulate Enter key to send the typed message (native + pyautogui for full coverage)
             press_enter_interactive()
-            time.sleep(0.3)
+            time.sleep(0.2)
+            try:
+                import pyautogui
+                pyautogui.press("enter")
+            except Exception:
+                pass
+            time.sleep(0.4)
             press_enter_interactive()
 
             return {
@@ -542,6 +555,11 @@ def send_via_contact_search(contact_name: str, message: str) -> Dict[str, Any]:
         pyautogui.hotkey("ctrl", "v")
         time.sleep(0.5)
         press_enter_interactive()
+        time.sleep(0.2)
+        try:
+            pyautogui.press("enter")
+        except Exception:
+            pass
         time.sleep(0.3)
         press_enter_interactive()
 
