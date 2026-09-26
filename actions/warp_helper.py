@@ -30,16 +30,27 @@ def _get_api_key() -> str:
     except Exception:
         return ""
 
-def _get_gemini():
-    import warnings
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=FutureWarning)
-        import google.generativeai as genai
+def _generate_workflow_yaml(prompt: str) -> str:
     api_key = _get_api_key()
     if not api_key:
         raise ValueError("Coding API Key or Gemini API Key is missing inside config/api_keys.json.")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel(GEMINI_MODEL)
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        resp = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+        )
+        return (resp.text or "").strip()
+    except Exception:
+        try:
+            import google.generativeai as legacy_genai
+            legacy_genai.configure(api_key=api_key)
+            model = legacy_genai.GenerativeModel(GEMINI_MODEL)
+            resp = model.generate_content(prompt)
+            return (resp.text or "").strip()
+        except Exception as e:
+            raise e
 
 def _clean_yaml(text: str) -> str:
     text = text.strip()
@@ -151,9 +162,8 @@ Return ONLY the raw YAML code block. No explanations, no extra talk, no markdown
 """
 
     try:
-        model = _get_gemini()
-        response = model.generate_content(prompt)
-        yaml_content = _clean_yaml(response.text)
+        raw_text = _generate_workflow_yaml(prompt)
+        yaml_content = _clean_yaml(raw_text)
     except Exception as e:
         return f"Pratik Sir, failed to generate workflow via Gemini: {e}"
 

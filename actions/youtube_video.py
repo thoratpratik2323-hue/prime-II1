@@ -159,29 +159,42 @@ def _get_transcript(video_id: str) -> str | None:
 
 
 def _summarize_with_gemini(transcript: str, video_url: str) -> str:
-    import warnings
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=FutureWarning)
-        import google.generativeai as genai
-
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        system_instruction=(
-            "You are IP Prime, an AI assistant. Your owner is Pratik Thorat. "
-            "Summarize YouTube video transcripts clearly and concisely. "
-            "Structure: 1-sentence overview, then 3-5 key points. "
-            "Be direct. Address the user as 'sir'. "
-            "Match the language of the transcript."
-        )
-    )
-
+    api_key = _get_api_key()
     max_chars = 80000
     truncated = transcript[:max_chars] + ("..." if len(transcript) > max_chars else "")
-    response  = model.generate_content(
-        f"Please summarize this YouTube video transcript:\n\n{truncated}"
+    prompt = f"Please summarize this YouTube video transcript:\n\n{truncated}"
+    system_instruction = (
+        "You are IP Prime, an AI assistant. Your owner is Pratik Thorat. "
+        "Summarize YouTube video transcripts clearly and concisely. "
+        "Structure: 1-sentence overview, then 3-5 key points. "
+        "Be direct. Address the user as 'sir'. "
+        "Match the language of the transcript."
     )
-    return response.text.strip()
+
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction
+            )
+        )
+        return (response.text or "").strip()
+    except Exception:
+        try:
+            import google.generativeai as legacy_genai
+            legacy_genai.configure(api_key=api_key)
+            model = legacy_genai.GenerativeModel(
+                model_name="gemini-2.5-flash",
+                system_instruction=system_instruction
+            )
+            response = model.generate_content(prompt)
+            return (response.text or "").strip()
+        except Exception as e:
+            return f"Could not summarize transcript: {e}"
 
 
 def _save_summary(content: str, video_url: str) -> str:

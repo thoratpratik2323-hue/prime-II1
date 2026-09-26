@@ -43,16 +43,25 @@ class ModelOrchestrator:
             return "Model not found"
     
     def _query_gemini(self, prompt: str, context: Optional[str]) -> str:
-        """Query Gemini API."""
+        """Query Gemini API with modern google.genai SDK and legacy fallback."""
+        full_prompt = f"{context}\n{prompt}" if context else prompt
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=self.gemini_key)
-            model = genai.GenerativeModel("gemini-pro")
-            full_prompt = f"{context}\n{prompt}" if context else prompt
-            response = model.generate_content(full_prompt)
-            return response.text
-        except Exception as e:
-            return f"Gemini Error: {str(e)}"
+            from google import genai
+            client = genai.Client(api_key=self.gemini_key)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=full_prompt,
+            )
+            return response.text or ""
+        except Exception:
+            try:
+                import google.generativeai as legacy_genai
+                legacy_genai.configure(api_key=self.gemini_key)
+                model = legacy_genai.GenerativeModel("gemini-2.5-flash")
+                response = model.generate_content(full_prompt)
+                return response.text or ""
+            except Exception as e:
+                return f"Gemini Error: {str(e)}"
     
     def _query_claude(self, prompt: str, context: Optional[str]) -> str:
         """Query Claude via OpenRouter."""
@@ -62,7 +71,7 @@ class ModelOrchestrator:
                 "model": "anthropic/claude-3-sonnet",
                 "messages": [{"role": "user", "content": f"{context}\n{prompt}" if context else prompt}]
             }
-            response = requests.post("https://openrouter.io/api/v1/chat/completions", 
+            response = requests.post("https://openrouter.ai/api/v1/chat/completions", 
                                    headers=headers, json=data, timeout=30)
             return response.json()["choices"][0]["message"]["content"]
         except Exception as e:
@@ -76,7 +85,7 @@ class ModelOrchestrator:
                 "model": "openai/gpt-4",
                 "messages": [{"role": "user", "content": f"{context}\n{prompt}" if context else prompt}]
             }
-            response = requests.post("https://openrouter.io/api/v1/chat/completions", 
+            response = requests.post("https://openrouter.ai/api/v1/chat/completions", 
                                    headers=headers, json=data, timeout=30)
             return response.json()["choices"][0]["message"]["content"]
         except Exception as e:

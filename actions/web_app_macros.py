@@ -46,8 +46,8 @@ def automate_gmail(action):
                 pyautogui.press('d')
             elif "refresh" in action_l or "reload inbox" in action_l:
                 pyautogui.press('u')
-        except Exception as e:
-            print(f"[GMAIL WORKER ERR] {e}")
+        except Exception:
+            pass
 
     threading.Thread(target=worker, daemon=True).start()
     
@@ -96,8 +96,8 @@ def automate_drive(action):
                 pyautogui.press('g')
                 time.sleep(0.1)
                 pyautogui.press('r')
-        except Exception as e:
-            print(f"[DRIVE WORKER ERR] {e}")
+        except Exception:
+            pass
 
     threading.Thread(target=worker, daemon=True).start()
     

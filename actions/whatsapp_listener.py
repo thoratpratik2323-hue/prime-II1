@@ -393,16 +393,9 @@ class WhatsAppListenerService:
 def execute_ip_prime_command(command_text: str, player=None) -> str:
     cleaned = re.sub(r'^[/*!]ip\s+', '', command_text, flags=re.IGNORECASE).strip()
     
-    import warnings
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=FutureWarning)
-        import google.generativeai as genai
     from actions.dev_agent import _get_api_key, _strip_fences
     
     try:
-        genai.configure(api_key=_get_api_key())
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        
         # Fetch active MCP tools
         mcp_tools_desc = ""
         try:
@@ -456,8 +449,26 @@ Return JSON format:
   "parameters": {{ ... }}
 }}
 """
-        response = model.generate_content(prompt)
-        raw_json = _strip_fences(response.text)
+        api_key = _get_api_key()
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            resp = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            )
+            raw_text = resp.text or ""
+        except Exception:
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=FutureWarning)
+                import google.generativeai as legacy_genai
+            legacy_genai.configure(api_key=api_key)
+            legacy_model = legacy_genai.GenerativeModel("gemini-2.5-flash")
+            response = legacy_model.generate_content(prompt)
+            raw_text = response.text or ""
+
+        raw_json = _strip_fences(raw_text)
         routing = json.loads(raw_json)
         
         action = routing.get("action")

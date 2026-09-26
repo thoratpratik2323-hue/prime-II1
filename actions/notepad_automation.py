@@ -54,8 +54,8 @@ def automate_notepad(action, arg=None):
                     text_to_type = re.sub(r'\s+in\s+notepad$', '', text_to_type, flags=re.IGNORECASE)
                     text_to_type = re.sub(r'\s+on\s+notepad$', '', text_to_type, flags=re.IGNORECASE)
                     pyautogui.write(text_to_type, interval=0.005)
-        except Exception as e:
-            print(f"[NOTEPAD WORKER ERR] {e}")
+        except Exception:
+            pass
 
     threading.Thread(target=worker, daemon=True).start()
 

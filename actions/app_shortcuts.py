@@ -44,8 +44,8 @@ def automate_calculator(action):
                 pyautogui.press('esc')
             elif "close" in action_l:
                 pyautogui.hotkey('alt', 'f4')
-        except Exception as e:
-            print(f"[CALCULATOR WORKER ERR] {e}")
+        except Exception:
+            pass
 
     threading.Thread(target=worker, daemon=True).start()
     
@@ -125,8 +125,8 @@ def automate_paint(action):
                 pyautogui.press('f11')
             elif "close" in action_l:
                 pyautogui.hotkey('alt', 'f4')
-        except Exception as e:
-            print(f"[PAINT WORKER ERR] {e}")
+        except Exception:
+            pass
 
     threading.Thread(target=worker, daemon=True).start()
     
@@ -238,8 +238,8 @@ def automate_explorer(action, arg=None):
                 pyautogui.hotkey('ctrl', 'f')
             elif "close" in action_l or "shutdown" in action_l:
                 pyautogui.hotkey('ctrl', 'w')
-        except Exception as e:
-            print(f"[EXPLORER WORKER ERR] {e}")
+        except Exception:
+            pass
 
     threading.Thread(target=worker, daemon=True).start()
     

@@ -74,12 +74,15 @@ def play_youtube(query):
     def click_first():
         if not _PYAUTOGUI:
             return
-        time.sleep(6)
-        pyautogui.press('tab')
-        time.sleep(0.5)
-        pyautogui.press('enter')
-        time.sleep(2)
-        pyautogui.press('f')
+        try:
+            time.sleep(6)
+            pyautogui.press('tab')
+            time.sleep(0.5)
+            pyautogui.press('enter')
+            time.sleep(2)
+            pyautogui.press('f')
+        except Exception:
+            pass
         
     threading.Thread(target=click_first, daemon=True).start()
     
@@ -128,8 +131,8 @@ def automate_youtube(action):
                 pyautogui.press('t')
             elif "subtitle" in action_l or "captions" in action_l:
                 pyautogui.press('c')
-        except Exception as e:
-            print(f"[YOUTUBE WORKER ERR] {e}")
+        except Exception:
+            pass
 
     threading.Thread(target=worker, daemon=True).start()
     

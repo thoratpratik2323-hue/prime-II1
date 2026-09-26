@@ -53,38 +53,45 @@ def generate_presentation_from_topic(topic: str, slide_count: int = 5, player: O
     slides_data = []
 
     if gemini_key:
+        prompt = (
+            f"You are a professional presentation designer. Create a PowerPoint outline for the topic: '{topic}'. "
+            f"Create exactly {slide_count} slides. "
+            "For each slide, provide a Title, 3-4 Bullet points, and Speaker notes. "
+            "Return the response in a clean, strict JSON format matching this schema:\n"
+            "{\n"
+            "  \"slides\": [\n"
+            "    {\n"
+            "      \"title\": \"Slide Title\",\n"
+            "      \"bullets\": [\"Bullet point 1\", \"Bullet point 2\", \"Bullet point 3\"],\n"
+            "      \"notes\": \"Detailed speaker notes for this slide.\"\n"
+            "    }\n"
+            "  ]\n"
+            "}\n"
+            "Return only the raw JSON. Do not include markdown backticks."
+        )
         try:
-            import warnings
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=FutureWarning)
-                import google.generativeai as genai
-            genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            
-            prompt = (
-                f"You are a professional presentation designer. Create a PowerPoint outline for the topic: '{topic}'. "
-                f"Create exactly {slide_count} slides. "
-                "For each slide, provide a Title, 3-4 Bullet points, and Speaker notes. "
-                "Return the response in a clean, strict JSON format matching this schema:\n"
-                "{\n"
-                "  \"slides\": [\n"
-                "    {\n"
-                "      \"title\": \"Slide Title\",\n"
-                "      \"bullets\": [\"Bullet point 1\", \"Bullet point 2\", \"Bullet point 3\"],\n"
-                "      \"notes\": \"Detailed speaker notes for this slide.\"\n"
-                "    }\n"
-                "  ]\n"
-                "}\n"
-                "Return only the raw JSON. Do not include markdown backticks."
+            from google import genai
+            client = genai.Client(api_key=gemini_key)
+            res = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
             )
-            res = model.generate_content(prompt)
-            res_text = res.text.strip()
+            res_text = (res.text or "").strip()
             if "```" in res_text:
                 res_text = res_text.replace("```json", "").replace("```", "").strip()
-                
             slides_data = json.loads(res_text).get("slides", [])
         except Exception as e:
-            logger.error("Gemini outline generation failed: %s. Falling back to structured simulation.", e)
+            try:
+                import google.generativeai as legacy_genai
+                legacy_genai.configure(api_key=gemini_key)
+                model = legacy_genai.GenerativeModel("gemini-2.5-flash")
+                res = model.generate_content(prompt)
+                res_text = (res.text or "").strip()
+                if "```" in res_text:
+                    res_text = res_text.replace("```json", "").replace("```", "").strip()
+                slides_data = json.loads(res_text).get("slides", [])
+            except Exception as legacy_err:
+                logger.error("Gemini outline generation failed: %s. Falling back to structured simulation.", legacy_err or e)
 
     if not slides_data:
         # Structured mock fallback

@@ -6,10 +6,6 @@ from prime_platform.local_first import run_local_prompt
 
 
 def _cloud_generate(prompt: str) -> str:
-    import warnings
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=FutureWarning)
-        import google.generativeai as genai
     from pathlib import Path
     import json
 
@@ -17,10 +13,24 @@ def _cloud_generate(prompt: str) -> str:
     with open(config_path, encoding="utf-8") as f:
         cfg = json.load(f)
     key = cfg.get("coding_api_key") or cfg.get("gemini_api_key", "")
-    genai.configure(api_key=key)
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    resp = model.generate_content(prompt)
-    return (resp.text or "").strip()
+    
+    try:
+        from google import genai
+        client = genai.Client(api_key=key)
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+        return (resp.text or "").strip()
+    except Exception:
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            import google.generativeai as legacy_genai
+        legacy_genai.configure(api_key=key)
+        model = legacy_genai.GenerativeModel("gemini-2.5-flash")
+        resp = model.generate_content(prompt)
+        return (resp.text or "").strip()
 
 
 def prime_writing(
