@@ -547,6 +547,66 @@ class AIAgent:
                 voice.speak(msg)
             return msg
 
+        # 2b. WhatsApp Commands (Local / Offline / Fast-path)
+        m_wa_send = (
+            re.search(r'(?:send\s+)?(?:a\s+)?whatsapp(?:\s+message)?\s+(?:to\s+)?([a-zA-Z0-9\s]+?)\s+(?:saying|that|bol\s+ke|likh\s+ke|:)\s*(.+)', lower)
+            or re.search(r'whatsapp\s+(?:pe\s+)?([a-zA-Z0-9\s]+?)\s+(?:ko\s+)?(?:msg|message|bolo|bhejo)\s*(.+)', lower)
+            or re.search(r'([a-zA-Z0-9\s]+?)\s+ko\s+whatsapp\s+(?:pe\s+)?(?:msg|message|karo|bhejo)\s*(.+)', lower)
+            or re.search(r'(?:message|msg)\s+([a-zA-Z0-9\s]+?)\s+on\s+whatsapp\s+(.+)', lower)
+        )
+        if m_wa_send:
+            rec = m_wa_send.group(1).strip()
+            msg_body = m_wa_send.group(2).strip()
+            rec_clean = re.sub(r'\b(to|ko|la|se|the|my|friend)\b', '', rec, flags=re.IGNORECASE).strip() or rec
+            if on_tool_call:
+                on_tool_call("sendWhatsAppMessage", {"recipient": rec_clean, "message": msg_body})
+            res = execute_tool("sendWhatsAppMessage", {"recipient": rec_clean, "message": msg_body})
+            if on_tool_result:
+                on_tool_result("sendWhatsAppMessage", res)
+            out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, "WhatsApp message dispatched.")
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        if any(k in lower for k in ("open whatsapp", "whatsapp open", "whatsapp kholo", "kholo whatsapp", "launch whatsapp")):
+            m_chat = re.search(r'(?:with|of|ka|ki|ke\s+sath)\s+([a-zA-Z0-9\s]+)', lower)
+            if m_chat:
+                rec = m_chat.group(1).strip()
+                if on_tool_call:
+                    on_tool_call("openWhatsAppChat", {"recipient": rec})
+                res = execute_tool("openWhatsAppChat", {"recipient": rec})
+                if on_tool_result:
+                    on_tool_result("openWhatsAppChat", res)
+                out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, f"Opened WhatsApp chat with {rec}.")
+            else:
+                if on_tool_call:
+                    on_tool_call("openApplication", {"name": "whatsapp"})
+                res = execute_tool("openApplication", {"name": "whatsapp"})
+                if on_tool_result:
+                    on_tool_result("openApplication", res)
+                out = "Opening WhatsApp on your desktop, Sir."
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        m_wa_call = (
+            re.search(r'(?:call|voice\s+call|video\s+call)\s+(?:to\s+)?([a-zA-Z0-9\s]+?)\s+(?:on|via)\s+whatsapp', lower)
+            or re.search(r'whatsapp\s+(?:pe\s+)?([a-zA-Z0-9\s]+?)\s+ko\s+call\s+karo', lower)
+            or re.search(r'whatsapp\s+call\s+(?:to\s+)?([a-zA-Z0-9\s]+)', lower)
+        )
+        if m_wa_call:
+            rec = m_wa_call.group(1).strip()
+            ctype = "video" if "vid" in lower else "voice"
+            if on_tool_call:
+                on_tool_call("makeWhatsAppCall", {"recipient": rec, "call_type": ctype})
+            res = execute_tool("makeWhatsAppCall", {"recipient": rec, "call_type": ctype})
+            if on_tool_result:
+                on_tool_result("makeWhatsAppCall", res)
+            out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, f"Initiating WhatsApp call to {rec}.")
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
         # 3. Open applications or websites
         m_app = (
             re.match(r"(?:open|launch|start|kholo|chalao)\s+(?:the\s+)?(?:app\s+)?([a-zA-Z0-9\s\.\-_]+)", lower)

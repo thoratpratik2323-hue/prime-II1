@@ -421,33 +421,67 @@ def run_on_interactive_thread(fn: Callable[..., Any], *args, **kwargs) -> Any:
     return result_container.get("result")
 
 
+_LAST_WHATSAPP_RENDER_HWND: Optional[int] = None
+
+
 def _focus_whatsapp_window_raw() -> bool:
-    """Finds and brings ANY active WhatsApp window (WinUI Desktop App, Chrome WhatsApp Web, Edge) to the foreground."""
+    """
+    Finds and brings ANY active WhatsApp window (WinUI Desktop App, Chrome WhatsApp Web, Edge) to the foreground.
+    Specifically captures both the outer WinUI frame AND the inner WebView2 Chrome_RenderWidgetHostHWND
+    so keyboard focus lands squarely in the chat input box.
+    """
+    global _LAST_WHATSAPP_RENDER_HWND
     if platform.system() != "Windows":
         return False
     try:
         import ctypes
         from ctypes import wintypes
+        import psutil
+
         u32 = ctypes.windll.user32
         h_desk = u32.OpenDesktopW("Default", 0, False, 0x01FF)
         if h_desk:
             u32.SetThreadDesktop(h_desk)
 
         WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
-        hwnds = []
+        shell_h = None
+        webview_h = None
+        browser_h = None
+        render_h = None
 
         def _cb(h, _):
+            nonlocal shell_h, webview_h, browser_h
+            if not u32.IsWindowVisible(h):
+                return True
             buf = ctypes.create_unicode_buffer(512)
             u32.GetWindowTextW(h, buf, 512)
             t = buf.value
             u32.GetClassNameW(h, buf, 512)
             c = buf.value
+
             # Exclude background helper/IME/notification windows
-            if any(bad in c.lower() for bad in ("hook", "notify", "ime", "broadcast")):
+            if any(bad in c.lower() for bad in ("hook", "notify", "ime", "broadcast", "pointer")):
                 return True
-            if "whatsapp" in t.lower() or "whatsapp" in c.lower() or "winuidesktop" in c.lower():
-                is_vis = bool(u32.IsWindowVisible(h))
-                hwnds.append((h, t, c, is_vis))
+
+            pid = ctypes.c_ulong()
+            u32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+            try:
+                pname = psutil.Process(pid.value).name().lower()
+            except Exception:
+                pname = ""
+
+            # 1. Native WhatsApp Desktop Shell (WinUI 3 container)
+            if ("whatsapp.root" in pname or "whatsapp" in pname) and "winui" in c.lower():
+                shell_h = h
+            # 2. Embedded WebView2 inside WhatsApp Desktop (where chats/messages are rendered)
+            elif "msedgewebview2" in pname and "chrome_widgetwin" in c.lower() and "whatsapp" in t.lower():
+                webview_h = h
+            # 3. WhatsApp Web in Chrome / Edge / Firefox
+            elif "whatsapp" in t.lower() and any(br in pname for br in ("chrome", "msedge", "firefox", "brave")):
+                browser_h = h
+            elif "whatsapp" in t.lower() and not shell_h:
+                shell_h = h
+
             return True
 
         cb = WNDENUMPROC(_cb)
@@ -456,22 +490,37 @@ def _focus_whatsapp_window_raw() -> bool:
         else:
             u32.EnumWindows(cb, 0)
 
-        # Prioritize visible main window with WhatsApp title or WinUI class
-        hwnds.sort(key=lambda x: (x[3], x[1] == "WhatsApp", "winui" in x[2].lower()), reverse=True)
+        # Enumerate WebView2 children to find the exact Chrome_RenderWidgetHostHWND (input sink)
+        target_webview = webview_h or shell_h
+        if target_webview:
+            def _cb_c(h, _):
+                nonlocal render_h
+                buf = ctypes.create_unicode_buffer(512)
+                u32.GetClassNameW(h, buf, 512)
+                if "renderwidgethost" in buf.value.lower():
+                    render_h = h
+                return True
+            u32.EnumChildWindows(target_webview, WNDENUMPROC(_cb_c), 0)
 
-        if hwnds:
-            hwnd = hwnds[0][0]
+        _LAST_WHATSAPP_RENDER_HWND = render_h or webview_h
+
+        # Determine primary window to bring to front
+        primary = shell_h or browser_h or webview_h
+        if primary:
             curr_tid = ctypes.windll.kernel32.GetCurrentThreadId()
             fore_hwnd = u32.GetForegroundWindow()
             fore_tid = u32.GetWindowThreadProcessId(fore_hwnd, None)
             u32.AttachThreadInput(curr_tid, fore_tid, True)
-            u32.ShowWindow(hwnd, 9)  # SW_RESTORE
-            u32.ShowWindow(hwnd, 5)  # SW_SHOW
-            u32.SetForegroundWindow(hwnd)
-            u32.BringWindowToTop(hwnd)
-            u32.SetFocus(hwnd)
+
+            u32.ShowWindow(primary, 9)  # SW_RESTORE
+            u32.ShowWindow(primary, 5)  # SW_SHOW
+            u32.SetForegroundWindow(primary)
+            u32.BringWindowToTop(primary)
+
+            focus_target = render_h or webview_h or primary
+            u32.SetFocus(focus_target)
             u32.AttachThreadInput(curr_tid, fore_tid, False)
-            log.info("Focused WhatsApp window: HWND %s (%s - %s)", hwnd, hwnds[0][1], hwnds[0][2])
+            log.info("Focused WhatsApp window: Primary HWND %s, Input Target HWND %s", primary, focus_target)
             return True
     except Exception as e:
         log.debug("_focus_whatsapp_window_raw error: %s", e)
@@ -486,7 +535,11 @@ def focus_whatsapp_window() -> bool:
 def press_enter_interactive():
     """
     Simulates genuine hardware-level Enter keystroke on interactive desktop.
-    Combines 64-bit SendInput with hardware scan code 0x1C, native keybd_event, and PyAutoGUI.
+    Combines:
+    1. Direct WM_KEYDOWN / WM_KEYUP window message to Chrome_RenderWidgetHostHWND
+    2. 64-bit SendInput with hardware scan code 0x1C (WinUI / UWP compliant)
+    3. Native keybd_event with scan code 0x1C
+    4. PyAutoGUI enter press fallback
     """
     if platform.system() != "Windows":
         try:
@@ -500,7 +553,19 @@ def press_enter_interactive():
     from ctypes import wintypes
     u32 = ctypes.windll.user32
 
-    # 1. Hardware-level SendInput with scan code 0x1C (accepted by WinUI / XAML / UWP)
+    # 1. Direct PostMessage to WebView2 Chrome_RenderWidgetHostHWND (instant Chromium input processing)
+    global _LAST_WHATSAPP_RENDER_HWND
+    if _LAST_WHATSAPP_RENDER_HWND and u32.IsWindow(_LAST_WHATSAPP_RENDER_HWND):
+        try:
+            # WM_KEYDOWN: VK_RETURN (0x0D), lparam: repeat 1, scan 0x1C (0x001C0001)
+            u32.PostMessageW(_LAST_WHATSAPP_RENDER_HWND, 0x0100, 0x0D, 0x001C0001)
+            time.sleep(0.03)
+            # WM_KEYUP: VK_RETURN (0x0D), lparam: previous down, transition state (0xC01C0001)
+            u32.PostMessageW(_LAST_WHATSAPP_RENDER_HWND, 0x0101, 0x0D, 0xC01C0001)
+        except Exception as e:
+            log.debug("PostMessage to render host failed: %s", e)
+
+    # 2. Hardware-level SendInput with scan code 0x1C (accepted by WinUI / XAML / UWP)
     try:
         ULONG_PTR = ctypes.c_ulonglong
 
@@ -560,7 +625,7 @@ def press_enter_interactive():
     except Exception as e:
         log.debug("SendInput failed: %s", e)
 
-    # 2. Native keybd_event WITH hardware scan code 0x1C
+    # 3. Native keybd_event WITH hardware scan code 0x1C
     try:
         u32.keybd_event(0x0D, 0x1C, 0, 0)
         time.sleep(0.04)
@@ -568,7 +633,7 @@ def press_enter_interactive():
     except Exception as e:
         log.debug("keybd_event failed: %s", e)
 
-    # 3. PyAutoGUI press fallback
+    # 4. PyAutoGUI press fallback
     try:
         import pyautogui
         pyautogui.press("enter")
@@ -578,7 +643,7 @@ def press_enter_interactive():
 
 def send_via_desktop_protocol(phone_number: str, message: str) -> Dict[str, Any]:
     """Send message via the official Windows whatsapp:// protocol handler on user's desktop."""
-    clean_num = phone_number.replace("+", "")
+    clean_num = re.sub(r"[^\d]", "", phone_number)
     encoded_msg = urllib.parse.quote(message)
     uri = f"whatsapp://send?phone={clean_num}&text={encoded_msg}"
 
@@ -676,7 +741,7 @@ class WhatsAppWebService:
     def send_via_web(self, phone_number: str, message: str) -> Dict[str, Any]:
         """Send message using Playwright with persistent session and multi-selector resilience."""
         from playwright.sync_api import sync_playwright
-        clean_num = phone_number.replace("+", "")
+        clean_num = re.sub(r"[^\d]", "", phone_number)
         encoded_msg = urllib.parse.quote(message)
         url = f"https://web.whatsapp.com/send?phone={clean_num}&text={encoded_msg}"
 
@@ -877,7 +942,7 @@ def open_whatsapp_chat(recipient: str) -> Dict[str, Any]:
     set_last_mentioned_contact(display_name or recipient)
 
     if phone:
-        clean_num = phone.replace("+", "")
+        clean_num = re.sub(r"[^\d]", "", phone)
         uri = f"whatsapp://send?phone={clean_num}"
         try:
             # 1. Open via Windows WhatsApp Desktop protocol
@@ -995,7 +1060,7 @@ def make_whatsapp_call(recipient: str, call_type: str = "voice") -> Dict[str, An
 
         # 1. Open chat
         if phone:
-            clean_num = phone.replace("+", "")
+            clean_num = re.sub(r"[^\d]", "", phone)
             launch_on_interactive_desktop(f'explorer.exe "whatsapp://send?phone={clean_num}"')
             time.sleep(2.5)
             _focus_whatsapp_window_raw()

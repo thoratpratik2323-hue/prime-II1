@@ -65,10 +65,7 @@ def open_in_firefox(url):
 def send_whatsapp(target, message):
     """Prefill WhatsApp Web with the number and message, bring Chrome/Firefox to focus, and auto-send after load."""
     phone = resolve_contact(target)
-    if not phone:
-        return f"Contact '{target}' could not be resolved, Sir."
-        
-    phone_clean = re.sub(r'[\s\-()]', '', phone)
+    phone_clean = re.sub(r'[\s\-()]', '', phone) if phone else target
     if phone_clean.isdigit() and len(phone_clean) == 10:
         phone_clean = "+91" + phone_clean
     elif not phone_clean.startswith("+") and phone_clean.isdigit():
@@ -80,29 +77,13 @@ def send_whatsapp(target, message):
     # Open in Browser
     open_in_firefox(url)
     
-    def auto_send_worker():
-        if not _PYAUTOGUI:
-            return
-            
-        # Wait for WhatsApp Web to load securely (10 seconds)
-        time.sleep(10.0)
+    # Also trigger unified manager dispatch
+    try:
+        from whatsapp_manager import send_whatsapp as manager_send
+        manager_send(recipient=target, message=message)
+    except Exception:
+        pass
         
-        # Bring Chrome/Firefox to focus
-        if platform.system() == "Windows":
-            ps_script = (
-                "add-type -TypeDefinition 'using System; using System.Runtime.InteropServices; "
-                "public class Win32 { [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd); "
-                "[DllImport(\"user32.dll\")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow); }';"
-                "$proc = Get-Process | Where-Object { $_.ProcessName -eq 'chrome' -or $_.ProcessName -eq 'firefox' } | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1;"
-                "if ($proc) { [Win32]::ShowWindowAsync($proc.MainWindowHandle, 9) | Out-Null; [Win32]::SetForegroundWindow($proc.MainWindowHandle) | Out-Null }"
-            )
-            subprocess.run(["powershell", "-Command", ps_script], creationflags=subprocess.CREATE_NO_WINDOW)
-            time.sleep(0.5)
-            
-        pyautogui.press('enter')
-        print(f"[WHATSAPP AUTOMATION] Message sent to {phone_clean}")
-        
-    threading.Thread(target=auto_send_worker, daemon=True).start()
     return f"WhatsApp transmission protocol initiated for contact '{target}', Sir."
 
 # =====================================================================

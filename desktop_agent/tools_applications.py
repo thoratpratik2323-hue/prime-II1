@@ -40,6 +40,7 @@ APP_COMMANDS: Dict[str, Dict[str, str]] = {
     "wordpad": {"shell": "write", "image": "wordpad.exe", "label": "WordPad"},
     "paint": {"shell": "mspaint", "image": "mspaint.exe", "label": "Paint"},
     "snipping tool": {"uwp": "ms-screenclip:", "image": "ScreenClippingHost.exe", "label": "Snipping Tool"},
+    "whatsapp": {"uwp": "whatsapp:", "image": "WhatsApp.Root.exe", "label": "WhatsApp"},
 }
 
 NATIVE_OS_APPS = set(APP_COMMANDS.keys()) | {"code", "vs code", "visual studio code"}

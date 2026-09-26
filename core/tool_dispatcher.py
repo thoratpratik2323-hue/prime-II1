@@ -1,5 +1,11 @@
 import threading
 import traceback
+import json
+
+try:
+    from core.tool_registry import TOOL_DECLARATIONS
+except ImportError:
+    TOOL_DECLARATIONS = []
 
 # ── Action Imports ────────────────────────────────────────────────────────────
 from actions.file_processor import file_processor
@@ -440,11 +446,95 @@ async def dispatch_tool(name: str, args: dict, player, speak, loop) -> str:
                 r = f"Unknown web app service macro: '{service}'"
             result = r or "Done."
 
-        elif name == "whatsapp_automation":
-            target = args.get("target", "")
-            message = args.get("message", "")
-            r = await loop.run_in_executor(None, lambda: run_send_whatsapp(target=target, message=message))
-            result = r or "Done."
+        elif name in ("whatsapp_automation", "sendWhatsAppMessage", "send_whatsapp_message"):
+            from whatsapp_manager import send_whatsapp
+            target = args.get("target") or args.get("recipient") or args.get("contact") or args.get("to") or args.get("phone") or ""
+            message = args.get("message") or args.get("text") or args.get("body") or ""
+            if not target or not message:
+                result = "Both 'recipient' and 'message' are required to send a WhatsApp message, Sir."
+            else:
+                r = await loop.run_in_executor(None, lambda: send_whatsapp(recipient=target, message=message))
+                result = r.get("message") if isinstance(r, dict) else str(r)
+
+        elif name in ("openWhatsAppChat", "open_whatsapp_chat"):
+            from whatsapp_manager import open_whatsapp_chat
+            target = args.get("recipient") or args.get("contact") or args.get("target") or args.get("to") or args.get("name") or ""
+            if not target:
+                result = "'recipient' is required to open a WhatsApp chat, Sir."
+            else:
+                r = await loop.run_in_executor(None, lambda: open_whatsapp_chat(recipient=target))
+                result = r.get("message") if isinstance(r, dict) else str(r)
+
+        elif name in ("makeWhatsAppCall", "make_whatsapp_call"):
+            from whatsapp_manager import make_whatsapp_call
+            target = args.get("recipient") or args.get("contact") or args.get("target") or args.get("to") or args.get("name") or ""
+            call_type = args.get("call_type") or "voice"
+            if not target:
+                result = "'recipient' is required to make a WhatsApp call, Sir."
+            else:
+                r = await loop.run_in_executor(None, lambda: make_whatsapp_call(recipient=target, call_type=call_type))
+                result = r.get("message") if isinstance(r, dict) else str(r)
+
+        elif name in ("listWhatsAppContacts", "list_whatsapp_contacts"):
+            from whatsapp_manager import list_contacts
+            r = await loop.run_in_executor(None, list_contacts)
+            result = json.dumps(r.get("contacts", {})) if isinstance(r, dict) else str(r)
+
+        elif name in ("saveWhatsAppContact", "save_whatsapp_contact"):
+            from whatsapp_manager import save_contact
+            cname = str(args.get("name") or "").strip()
+            cphone = str(args.get("phone_number") or args.get("phone") or args.get("number") or "").strip()
+            if not cname or not cphone:
+                result = "Both 'name' and 'phone_number' are required to save a contact, Sir."
+            else:
+                r = await loop.run_in_executor(None, lambda: save_contact(name=cname, phone=cphone))
+                result = r.get("message") if isinstance(r, dict) else str(r)
+
+        elif name in ("acceptWhatsAppCall", "accept_whatsapp_call"):
+            from whatsapp_manager import accept_whatsapp_call
+            r = await loop.run_in_executor(None, accept_whatsapp_call)
+            result = r.get("message") if isinstance(r, dict) else str(r)
+
+        elif name in ("rejectWhatsAppCall", "reject_whatsapp_call"):
+            from whatsapp_manager import reject_whatsapp_call
+            r = await loop.run_in_executor(None, reject_whatsapp_call)
+            result = r.get("message") if isinstance(r, dict) else str(r)
+
+        elif name in ("endWhatsAppCall", "end_whatsapp_call"):
+            from whatsapp_manager import end_whatsapp_call
+            r = await loop.run_in_executor(None, end_whatsapp_call)
+            result = r.get("message") if isinstance(r, dict) else str(r)
+
+        elif name in ("toggleWhatsAppCallMute", "toggle_whatsapp_call_mute"):
+            from whatsapp_manager import toggle_whatsapp_call_mute
+            r = await loop.run_in_executor(None, toggle_whatsapp_call_mute)
+            result = r.get("message") if isinstance(r, dict) else str(r)
+
+        elif name in ("scheduleWhatsAppCall", "schedule_whatsapp_call"):
+            from whatsapp_manager import schedule_whatsapp_call
+            target = args.get("recipient") or args.get("contact") or ""
+            tstr = args.get("time_str") or args.get("time") or ""
+            ctype = args.get("call_type") or "voice"
+            note = args.get("note") or ""
+            if not target or not tstr:
+                result = "Both 'recipient' and 'time_str' are required to schedule a call, Sir."
+            else:
+                r = await loop.run_in_executor(None, lambda: schedule_whatsapp_call(recipient=target, time_str=tstr, call_type=ctype, note=note))
+                result = r.get("message") if isinstance(r, dict) else str(r)
+
+        elif name in ("listScheduledWhatsAppCalls", "list_scheduled_calls"):
+            from whatsapp_manager import list_scheduled_calls
+            r = await loop.run_in_executor(None, list_scheduled_calls)
+            result = json.dumps(r.get("scheduled_calls", [])) if isinstance(r, dict) else str(r)
+
+        elif name in ("cancelScheduledWhatsAppCall", "cancel_scheduled_call"):
+            from whatsapp_manager import cancel_scheduled_call
+            ident = args.get("identifier") or args.get("call_id") or args.get("recipient") or ""
+            if not ident:
+                result = "'identifier' or contact name is required to cancel a scheduled call, Sir."
+            else:
+                r = await loop.run_in_executor(None, lambda: cancel_scheduled_call(identifier=ident))
+                result = r.get("message") if isinstance(r, dict) else str(r)
 
         elif name == "realtime_knowledge":
             query = args.get("query", "")
@@ -1518,3 +1608,25 @@ async def dispatch_tool(name: str, args: dict, player, speak, loop) -> str:
         speak(f"Sir, tool execution failed: {e}")
         
     return result
+
+
+async def execute_tool_dispatch(session, fc):
+    """
+    Bridge function consumed by core.session_manager for LiveConnect voice & tool dispatch.
+    """
+    name = getattr(fc, "name", "")
+    raw_args = getattr(fc, "args", {}) or {}
+    args = dict(raw_args) if isinstance(raw_args, dict) else {}
+    call_id = getattr(fc, "id", None) or getattr(fc, "call_id", None) or "call_0"
+    player = getattr(session, "ui", None) or session
+    res = await dispatch_tool(name=name, args=args, player=player)
+    try:
+        from google.genai import types
+        return types.FunctionResponse(
+            name=name,
+            id=call_id,
+            response={"result": res}
+        )
+    except Exception:
+        return {"name": name, "id": call_id, "response": {"result": res}}
+

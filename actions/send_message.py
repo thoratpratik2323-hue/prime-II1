@@ -14,16 +14,19 @@ import urllib.parse
 import threading
 import re
 
-CONTACTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'contacts.json')
+BASE_PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONTACTS_FILE = os.path.join(BASE_PROJECT_DIR, 'data', 'contacts.json')
+CONTACTS_FALLBACK = os.path.join(BASE_PROJECT_DIR, 'contacts.json')
 
 def load_contacts() -> dict:
-    if not os.path.exists(CONTACTS_FILE):
-        return {}
-    try:
-        with open(CONTACTS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    for path in (CONTACTS_FILE, CONTACTS_FALLBACK):
+        if os.path.exists(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception:
+                pass
+    return {}
 
 def save_contact(name: str, num: str) -> str:
     contacts = load_contacts()
@@ -32,14 +35,22 @@ def save_contact(name: str, num: str) -> str:
     if len(num_c) == 10 and not num_c.startswith('+'):
         num_c = '+91' + num_c
     contacts[name_l] = num_c
+    target_file = CONTACTS_FILE if os.path.exists(os.path.dirname(CONTACTS_FILE)) else CONTACTS_FALLBACK
     try:
-        with open(CONTACTS_FILE, 'w', encoding='utf-8') as f:
+        with open(target_file, 'w', encoding='utf-8') as f:
             json.dump(contacts, f, indent=4)
         return f"Contact {name} saved as {num_c}."
     except Exception as e:
         return f"Failed to save contact: {e}"
 
 def resolve_contact(target: str) -> str:
+    try:
+        from whatsapp_manager import resolve_recipient
+        phone, _ = resolve_recipient(target)
+        if phone:
+            return phone
+    except Exception:
+        pass
     contacts = load_contacts()
     target_l = target.lower().strip()
     if target_l in contacts:
@@ -196,29 +207,15 @@ def _desktop_send(app_name: str, receiver: str, message: str) -> str:
     return f"Message sent to {receiver} via {app_name}."
 
 def _send_whatsapp(receiver: str, message: str) -> str:
-    phone = resolve_contact(receiver)
-    phone_c = re.sub(r'[^0-9+]', '', phone)
-    if len(phone_c) == 10 and not phone_c.startswith('+'):
-        phone_c = '+91' + phone_c
-    
-    encoded_msg = urllib.parse.quote(message)
-    url = f"https://web.whatsapp.com/send?phone={phone_c}&text={encoded_msg}"
-    
-    def worker():
-        try:
-            if _get_os() == "windows":
-                subprocess.Popen(['firefox', url])
-                time.sleep(10)
-                ps_script = '$wshell = New-Object -ComObject wscript.shell; $wshell.AppActivate("Firefox")'
-                subprocess.run(["powershell", "-Command", ps_script], creationflags=subprocess.CREATE_NO_WINDOW)
-                time.sleep(1.0)
-                if _PYAUTOGUI:
-                    pyautogui.press('enter')
-        except Exception as e:
-            print(f"[WhatsApp Web ERR] {e}")
-
-    threading.Thread(target=worker, daemon=True).start()
-    return f"Sending WhatsApp message to {receiver} via WhatsApp Web, Sir."
+    try:
+        from whatsapp_manager import send_whatsapp
+        res = send_whatsapp(receiver, message)
+        if isinstance(res, dict):
+            return res.get("message") or f"WhatsApp message dispatched to {receiver}."
+        return str(res)
+    except Exception as e:
+        print(f"[WhatsApp Manager ERR] {e}")
+        return f"Failed to send WhatsApp message to {receiver}: {e}"
 
 def _send_telegram(receiver: str, message: str) -> str:
     return _desktop_send("Telegram", receiver, message)

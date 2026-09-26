@@ -1706,7 +1706,7 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         target = str(args.get('name') or args.get('application') or '').strip().lower()
         try:
             from desktop_agent.tools_websites import SITE_URLS
-            if target in SITE_URLS or '://' in target or target.startswith('www.') or any(target.endswith(ext) for ext in ('.com', '.org', '.net', '.io', '.ai', '.in', '.co')):
+            if (target in SITE_URLS and target != 'whatsapp') or '://' in target or target.startswith('www.') or any(target.endswith(ext) for ext in ('.com', '.org', '.net', '.io', '.ai', '.in', '.co')):
                 name = 'openWebsite'
                 args = {'url': target}
         except Exception:

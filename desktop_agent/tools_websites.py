@@ -24,6 +24,7 @@ SITE_URLS: Dict[str, str] = {
     "music": "https://open.spotify.com",
     "songs": "https://open.spotify.com",
     "whatsapp": "https://web.whatsapp.com",
+    "whatsapp web": "https://web.whatsapp.com",
     "telegram": "https://web.telegram.org",
     "discord": "https://discord.com/app",
     "chatgpt": "https://chatgpt.com",
