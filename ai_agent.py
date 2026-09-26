@@ -625,5 +625,8 @@ class AIAgent:
             voice.speak("Please configure an API key for full conversational capabilities.")
         return advisory
 
+    # Method alias for external compatibility
+    process_input = process_message
+
 
 agent = AIAgent()
