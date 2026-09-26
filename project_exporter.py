@@ -76,7 +76,7 @@ def export_workspace_zip(output_path: Optional[str] = None) -> Dict[str, Any]:
 
     zip_file = Path(output_path) if output_path else out_dir / "prime_workspace_backup.zip"
 
-    ignored_dirs = {".git", "node_modules", "__pycache__", "scratch", ".gemini", "exports", "tmp"}
+    ignored_dirs = {".git", "node_modules", "__pycache__", "scratch", ".gemini", "exports", "tmp", ".venv", "venv", ".idea", ".vscode"}
     files_added = 0
 
     with zipfile.ZipFile(str(zip_file), "w", zipfile.ZIP_DEFLATED) as zf:
