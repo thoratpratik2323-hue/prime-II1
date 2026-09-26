@@ -648,7 +648,8 @@ def _ambient_voice_worker():
                         set_standby_mode(False)
                         with _query_lock:
                             play_chime("resume")
-                            ack = "Main wapas active hoon, Pratik! Boliye, kya hukum hai?"
+                            is_british = "ryan" in getattr(voice, "current_voice", "").lower() or "en-gb" in getattr(voice, "current_voice", "").lower()
+                            ack = "Online and listening, Sir." if is_british else "Main wapas active hoon, Pratik! Boliye, kya hukum hai?"
                             console.print(f"\n[bold bright_green]⚡ RESUMED FROM STANDBY:[/bold bright_green] {ack}")
                             voice.speak(ack)
                             should_run, command = clean_command(raw_text)
@@ -659,7 +660,12 @@ def _ambient_voice_worker():
                             set_standby_mode(True)
                             with _query_lock:
                                 play_chime("sleep")
-                                ack = "Theek hai Pratik, main standby mode mein ja raha hoon. Jab bhi zaroorat ho, bas 'Prime' bol dena."
+                                is_shh = bool(re.search(r"\b(oh\s+)?sh+[h!]*\b|\bss+h+\b|\bquiet\b|\bhush\b", raw_text.lower()))
+                                is_british = "ryan" in getattr(voice, "current_voice", "").lower() or "en-gb" in getattr(voice, "current_voice", "").lower()
+                                if is_shh or is_british:
+                                    ack = "Understood. Standing by, Sir."
+                                else:
+                                    ack = "Theek hai Pratik, main standby mode mein ja raha hoon. Jab bhi zaroorat ho, bas 'Prime' bol dena."
                                 console.print(f"\n[bold yellow]🌙 STANDBY MODE ACTIVATED:[/bold yellow] {ack}")
                                 voice.speak(ack)
                                 continue

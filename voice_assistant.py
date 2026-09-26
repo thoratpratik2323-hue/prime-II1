@@ -123,6 +123,10 @@ STANDBY_TRIGGER_PATTERNS = [
     r"\b(mic|mike)\s+band\s+(kar\s+do|kardo|karo)\b",
     r"\bchup\s+baitho\b",
     r"\bkuch\s+mat\s+sun\b",
+    r"\b(oh\s+)?sh+[h!]*\b",
+    r"\bss+h+\b",
+    r"\bquiet\b",
+    r"\bhush\b",
 ]
 
 
