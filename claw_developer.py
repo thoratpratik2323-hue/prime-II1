@@ -272,6 +272,10 @@ def debug_file(
             prompt += f"--- INSTRUCTIONS ---\n{instructions}\n\n"
 
         prompt += (
+            "Follow Karpathy's Engineering Principles:\n"
+            "- Simplicity First: Provide the minimum code that solves the problem. No speculative abstractions or unnecessary flexibility.\n"
+            "- Surgical Changes: Touch ONLY the exact lines that must change. Match existing style. Do not touch or modify unrelated comments, functions, or imports.\n"
+            "- Verifiable Fix: Ensure search_block matches the existing code character-for-character so patching succeeds cleanly.\n\n"
             "Analyze the bug or requirement. Provide a clear diagnosis, and provide the exact search block "
             "and replacement block so it can be patched.\n"
             "Respond in JSON format with keys: 'diagnosis', 'search_block', 'replace_block', 'explanation'."
