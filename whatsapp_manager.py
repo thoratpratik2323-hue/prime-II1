@@ -166,12 +166,33 @@ VOICE_RECIPIENT_ALIASES: Dict[str, str] = {
     "mom": "mummy",
     "maa": "mummy",
     "mumma": "mummy",
+    "bhagwat dande": "bhagwat dhonde",
+    "bhagwat dhande": "bhagwat dhonde",
+    "dande": "bhagwat dhonde",
+    "dhande": "bhagwat dhonde",
 }
+
+_LAST_MENTIONED_CONTACT: Optional[str] = None
+
+
+def get_last_mentioned_contact() -> Optional[str]:
+    """Retrieve the contact name/number from the most recent conversation turn."""
+    global _LAST_MENTIONED_CONTACT
+    return _LAST_MENTIONED_CONTACT
+
+
+def set_last_mentioned_contact(name: str):
+    """Store the contact name/number for multi-turn conversational pronoun resolution."""
+    global _LAST_MENTIONED_CONTACT
+    if name and name.strip():
+        _LAST_MENTIONED_CONTACT = name.strip()
 
 
 def resolve_recipient(target: str) -> Tuple[Optional[str], str]:
     """
     Resolve recipient from either contact name or phone number.
+    Supports conversational pronouns ('usko', 'use', 'unhe', 'him', 'her')
+    referencing the last mentioned contact.
     Returns (phone_number, display_name).
     """
     contacts = load_contacts()
@@ -181,23 +202,35 @@ def resolve_recipient(target: str) -> Tuple[Optional[str], str]:
     # Normalize punctuation-stripped version
     target_norm = re.sub(r"[^\w\s]", "", target_lower).strip()
 
+    # 0. Conversational Pronoun Resolution ('usko', 'use', 'unhe', 'him', 'her')
+    pronouns = ("usko", "use", "unhe", "unko", "usse", "him", "her", "them", "that person", "last contact")
+    if target_norm in pronouns and _LAST_MENTIONED_CONTACT:
+        log.info("Resolving pronoun '%s' to last mentioned contact: '%s'", target_norm, _LAST_MENTIONED_CONTACT)
+        target_clean = _LAST_MENTIONED_CONTACT
+        target_lower = target_clean.lower()
+        target_norm = re.sub(r"[^\w\s]", "", target_lower).strip()
+
     # 1. Check Voice/Phonetic Aliases first
     if target_lower in VOICE_RECIPIENT_ALIASES:
         canonical = VOICE_RECIPIENT_ALIASES[target_lower]
         if canonical in contacts:
+            set_last_mentioned_contact(canonical)
             return contacts[canonical], canonical.title()
     if target_norm in VOICE_RECIPIENT_ALIASES:
         canonical = VOICE_RECIPIENT_ALIASES[target_norm]
         if canonical in contacts:
+            set_last_mentioned_contact(canonical)
             return contacts[canonical], canonical.title()
 
     # 2. Exact match in contacts (raw or normalized)
     if target_lower in contacts:
+        set_last_mentioned_contact(target_lower)
         return contacts[target_lower], target_clean
 
     for name, num in contacts.items():
         name_clean = re.sub(r"[^\w\s]", "", name.lower()).strip()
         if target_norm == name_clean:
+            set_last_mentioned_contact(name)
             return num, name.title()
 
     # 3. Clean common conversational postpositions / filler words
@@ -539,7 +572,7 @@ class WhatsAppWebService:
         }
 
     def send_via_web(self, phone_number: str, message: str) -> Dict[str, Any]:
-        """Send message using Playwright with persistent session."""
+        """Send message using Playwright with persistent session and multi-selector resilience."""
         from playwright.sync_api import sync_playwright
         clean_num = phone_number.replace("+", "")
         encoded_msg = urllib.parse.quote(message)
@@ -554,18 +587,59 @@ class WhatsAppWebService:
                         args=["--disable-blink-features=AutomationControlled"]
                     )
                     page = browser.pages[0] if browser.pages else browser.new_page()
-                    page.goto(url, timeout=45000)
+                    page.goto(url, timeout=30000)
 
-                    # Wait for message input box or send button
-                    send_btn = page.wait_for_selector('button[aria-label="Send"], span[data-icon="send"]', timeout=25000)
+                    # Quick check if QR code is showing (unauthenticated session)
+                    try:
+                        qr = page.locator('canvas, div[data-ref]').first
+                        if qr.is_visible(timeout=3000):
+                            browser.close()
+                            return {
+                                "ok": False,
+                                "qr_required": True,
+                                "error": "WhatsApp Web needs QR code scan. Please say 'setup WhatsApp Web' or open WhatsApp Web on screen."
+                            }
+                    except Exception:
+                        pass
+
+                    # Multi-selector for send button
+                    send_selectors = [
+                        'button[aria-label="Send"]',
+                        'span[data-icon="send"]',
+                        'button[data-testid="compose-btn-send"]',
+                        '[data-icon="send-light"]',
+                        'footer button span[data-icon="send"]'
+                    ]
+                    send_btn = None
+                    for sel in send_selectors:
+                        try:
+                            el = page.locator(sel).first
+                            if el.is_visible(timeout=2500):
+                                send_btn = el
+                                break
+                        except Exception:
+                            continue
+
                     if send_btn:
                         send_btn.click()
                         time.sleep(2.0)
                         browser.close()
                         return {"ok": True, "message": f"Message sent to {phone_number} via WhatsApp Web background session."}
-                    else:
-                        browser.close()
-                        return {"ok": False, "error": "Send button not found or chat did not load."}
+
+                    # Fallback: Focus editable compose box and hit Enter
+                    try:
+                        box = page.locator('footer div[contenteditable="true"]').first
+                        if box.is_visible(timeout=3000):
+                            box.focus()
+                            page.keyboard.press("Enter")
+                            time.sleep(2.0)
+                            browser.close()
+                            return {"ok": True, "message": f"Message sent to {phone_number} via compose Enter key dispatch."}
+                    except Exception:
+                        pass
+
+                    browser.close()
+                    return {"ok": False, "error": "Send button not found or chat did not load within timeout."}
             except Exception as e:
                 return {"ok": False, "error": f"WhatsApp Web transmission failed: {e}"}
 
@@ -690,6 +764,68 @@ def send_whatsapp(recipient: str, message: str) -> Dict[str, Any]:
         # User gave a name saved in their phone's WhatsApp! Search and send directly!
         log.info("Searching WhatsApp contacts directly for name '%s'...", recipient)
         return send_via_contact_search(recipient, message)
+
+
+def open_whatsapp_chat(recipient: str) -> Dict[str, Any]:
+    """
+    Open the WhatsApp chat conversation for the specified recipient
+    (via native Windows Desktop App or WhatsApp Web) WITHOUT sending any text message.
+    """
+    phone, display_name = resolve_recipient(recipient)
+    set_last_mentioned_contact(display_name or recipient)
+
+    if phone:
+        clean_num = phone.replace("+", "")
+        uri = f"whatsapp://send?phone={clean_num}"
+        try:
+            # 1. Open via Windows WhatsApp Desktop protocol
+            launch_on_interactive_desktop(f'explorer.exe "{uri}"')
+            time.sleep(1.0)
+            focus_whatsapp_window()
+            return {
+                "ok": True,
+                "recipient": display_name,
+                "phone": phone,
+                "method": "windows_protocol",
+                "message": f"Opened WhatsApp chat with {display_name} ({phone}) on your display."
+            }
+        except Exception as e:
+            log.warning("Desktop protocol open failed: %s, falling back to browser", e)
+            url = f"https://web.whatsapp.com/send?phone={clean_num}"
+            launch_on_interactive_desktop(f'explorer.exe "{url}"')
+            return {
+                "ok": True,
+                "recipient": display_name,
+                "phone": phone,
+                "method": "browser_web",
+                "message": f"Opened WhatsApp Web chat with {display_name} in your browser."
+            }
+    else:
+        # Search contact name directly in WhatsApp Desktop
+        try:
+            import pyautogui
+            import pyperclip
+            attach_thread_to_default_desktop()
+            launch_on_interactive_desktop('explorer.exe "whatsapp:"')
+            time.sleep(1.5)
+            focus_whatsapp_window()
+            time.sleep(0.4)
+            pyautogui.hotkey("ctrl", "n")
+            time.sleep(0.6)
+            pyperclip.copy(recipient)
+            pyautogui.hotkey("ctrl", "v")
+            time.sleep(1.0)
+            pyautogui.press("down")
+            time.sleep(0.2)
+            press_enter_interactive()
+            return {
+                "ok": True,
+                "recipient": recipient,
+                "method": "contact_search_desktop",
+                "message": f"Focused WhatsApp chat for '{recipient}' on screen."
+            }
+        except Exception as ex:
+            return {"ok": False, "error": f"Failed to open WhatsApp chat for '{recipient}': {ex}"}
 
 
 # =====================================================================

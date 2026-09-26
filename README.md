@@ -4,7 +4,7 @@
 
 [![Windows OS](https://img.shields.io/badge/OS-Windows_11_%2F_10-0078D6?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Tests Passing](https://img.shields.io/badge/Tests-125%2F125_Passing-brightgreen?style=for-the-badge&logo=pytest)](https://github.com/thoratpratik2323-hue/prime-II1)
+[![Tests Passing](https://img.shields.io/badge/Tests-127%2F127_Passing-brightgreen?style=for-the-badge&logo=pytest)](https://github.com/thoratpratik2323-hue/prime-II1)
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini-Flash--Lite_Latest-4285F4?style=for-the-badge&logo=google)](https://aistudio.google.com)
 [![Groq LPU](https://img.shields.io/badge/Groq-500+_Tokens/sec-F55036?style=for-the-badge&logo=fastapi)](https://groq.com)
 [![Voice Model](https://img.shields.io/badge/Voice-Brian_Multilingual_+22%25-blueviolet?style=for-the-badge)](https://github.com/thoratpratik2323-hue/prime-II1)

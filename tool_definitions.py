@@ -704,6 +704,17 @@ TOOL_SPECS: List[Dict[str, Any]] = [
     },
     # WhatsApp Automation Engine
     {
+        "name": "openWhatsAppChat",
+        "description": "Open a WhatsApp chat conversation on desktop for a specific contact or phone number WITHOUT sending any message. Use this when the user says 'open [name]', 'chat open karo', 'open WhatsApp with [name]', etc.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "recipient": {"type": "string", "description": "Contact name (e.g. 'Bhagwat', 'Yome', 'Mummy') or phone number."}
+            },
+            "required": ["recipient"]
+        }
+    },
+    {
         "name": "sendWhatsAppMessage",
         "description": "Send a WhatsApp message to any contact name or phone number. Supports saved contacts (e.g. 'Mom', 'Rahul') or raw phone numbers with auto-formatting.",
         "parameters": {
@@ -1209,6 +1220,17 @@ def _handle_self_healing_audit(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"Self-healing audit failed: {e}"}
 
 
+def _handle_open_whatsapp_chat(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import open_whatsapp_chat
+        recipient = str(args.get("recipient") or args.get("contact") or args.get("target") or args.get("to") or args.get("name") or "").strip()
+        if not recipient:
+            return {"ok": False, "error": "'recipient' is required to open a WhatsApp chat."}
+        return open_whatsapp_chat(recipient)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to open WhatsApp chat: {e}"}
+
+
 def _handle_send_whatsapp(args: Dict[str, Any]) -> Dict[str, Any]:
     try:
         from whatsapp_manager import send_whatsapp
@@ -1615,6 +1637,7 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getHardwareHealthAudit": _handle_get_hardware_health_audit,
     "setPowerProfile": _handle_set_power_profile,
     "extractVideoFrames": _handle_extract_video_frames,
+    "openWhatsAppChat": _handle_open_whatsapp_chat,
 }
 
 

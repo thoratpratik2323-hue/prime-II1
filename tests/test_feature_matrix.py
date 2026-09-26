@@ -782,9 +782,61 @@ class TestPrimeFeatureMatrix(unittest.TestCase):
         except ImportError:
             pass  # Skip synthetic test if cv2/numpy unavailable in minimal environment
 
+    def test_50_open_whatsapp_chat_and_pronouns(self):
+        """Feature 50: Dedicated WhatsApp Chat Opener and Multi-Turn Pronoun Resolution."""
+        from whatsapp_manager import set_last_mentioned_contact, get_last_mentioned_contact, resolve_recipient
+
+        # Test setting and resolving pronoun ('usko')
+        set_last_mentioned_contact("yome")
+        self.assertEqual(get_last_mentioned_contact(), "yome")
+        num, name = resolve_recipient("usko")
+        self.assertEqual(num, "+919022559152")
+        self.assertEqual(name, "Yome")
+
+        # Test phonetic alias resolution for 'dande' -> 'bhagwat dhonde'
+        num2, name2 = resolve_recipient("bhagwat dande")
+        self.assertEqual(num2, "+919226763415")
+        self.assertEqual(name2, "Bhagwat Dhonde")
+
+        # Test execute_tool openWhatsAppChat
+        chat_res = execute_tool("openWhatsAppChat", {"recipient": "bhagwat dande"})
+        self.assertTrue(chat_res.get("ok"))
+        self.assertEqual(chat_res.get("recipient"), "Bhagwat Dhonde")
+
+    def test_51_voice_standby_and_hallucination_filters(self):
+        """Feature 51: Voice Standby Mode, Whisper Repetition Suppression, and Phonetic Sanitizer."""
+        from voice_assistant import (
+            is_standby_command, is_hallucination_or_repetition, sanitize_spoken_transcript,
+            get_standby_mode, set_standby_mode
+        )
+
+        # 1. Standby Commands
+        self.assertTrue(is_standby_command("meri baat mat sun"))
+        self.assertTrue(is_standby_command("Prime chup raho"))
+        self.assertTrue(is_standby_command("mute ho jao"))
+        self.assertFalse(is_standby_command("Prime open chrome"))
+
+        # 2. Standby state switching
+        set_standby_mode(True)
+        self.assertTrue(get_standby_mode())
+        set_standby_mode(False)
+        self.assertFalse(get_standby_mode())
+
+        # 3. Degenerate repetition loop suppression
+        loop_speech = "Good, good. How do you guys do? Yeah. Good. Yeah. Good, good. Good, good. Good. Good. Good. Good. Good. Good. Good. Good. Good. Good."
+        self.assertTrue(is_hallucination_or_repetition(loop_speech))
+        legit_speech = "Prime write a python script to download images from google"
+        self.assertFalse(is_hallucination_or_repetition(legit_speech))
+
+        # 4. Phonetic sanitizer for Marathi/Hindi particle
+        sanitized = sanitize_spoken_transcript("abe mahato ye message usko bhej do")
+        self.assertNotIn("mahato", sanitized.lower())
+        self.assertIn("main bol raha hoon", sanitized)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

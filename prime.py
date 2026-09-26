@@ -561,7 +561,11 @@ _query_lock = threading.Lock()
 
 def _ambient_voice_worker():
     """Background 24/7 ambient microphone listener that processes spoken commands automatically."""
-    from voice_assistant import find_best_mic_index, clean_command, WAKE_WORDS, play_chime, get_require_wake_word
+    from voice_assistant import (
+        find_best_mic_index, clean_command, WAKE_WORDS, play_chime, get_require_wake_word,
+        get_standby_mode, set_standby_mode, is_standby_command, is_hallucination_or_repetition,
+        sanitize_spoken_transcript
+    )
     mic_idx, mic_name = find_best_mic_index()
 
     r = sr.Recognizer()
@@ -627,9 +631,42 @@ def _ambient_voice_worker():
                     if not raw_text:
                         continue
 
-                    should_run, command = clean_command(raw_text)
-                    if not should_run:
+                    # 1. Reject degenerate repetition / Whisper silence loops
+                    if is_hallucination_or_repetition(raw_text):
                         continue
+
+                    # 2. Sanitize frequent Marathi/Hindi phonetic artifacts
+                    raw_text = sanitize_spoken_transcript(raw_text)
+
+                    # 3. Check Standby Mode logic
+                    in_standby = get_standby_mode()
+                    if in_standby:
+                        # Only respond if an explicit wake word was spoken
+                        has_wake = any(re.search(rf'\b{re.escape(w)}\b', raw_text.lower()) for w in WAKE_WORDS)
+                        if not has_wake:
+                            continue
+                        set_standby_mode(False)
+                        with _query_lock:
+                            play_chime("resume")
+                            ack = "Main wapas active hoon, Pratik! Boliye, kya hukum hai?"
+                            console.print(f"\n[bold bright_green]⚡ RESUMED FROM STANDBY:[/bold bright_green] {ack}")
+                            voice.speak(ack)
+                            should_run, command = clean_command(raw_text)
+                            if not should_run or not command:
+                                continue
+                    else:
+                        if is_standby_command(raw_text):
+                            set_standby_mode(True)
+                            with _query_lock:
+                                play_chime("sleep")
+                                ack = "Theek hai Pratik, main standby mode mein ja raha hoon. Jab bhi zaroorat ho, bas 'Prime' bol dena."
+                                console.print(f"\n[bold yellow]🌙 STANDBY MODE ACTIVATED:[/bold yellow] {ack}")
+                                voice.speak(ack)
+                                continue
+
+                        should_run, command = clean_command(raw_text)
+                        if not should_run:
+                            continue
 
                     with _query_lock:
                         play_chime("wake")
@@ -660,7 +697,13 @@ def _ambient_voice_worker():
                             continue
 
                         handle_user_query(command)
-                        status_prompt = "● WAKE WORD LIVE — Say 'Prime' to command..." if get_require_wake_word() else "● AMBIENT MIC LIVE — Listening 24/7..."
+                        play_chime("done")
+                        if get_standby_mode():
+                            status_prompt = "🌙 STANDBY MODE ACTIVE — Say 'Prime' to wake..."
+                        elif get_require_wake_word():
+                            status_prompt = "● WAKE WORD LIVE — Say 'Prime' to command..."
+                        else:
+                            status_prompt = "● AMBIENT MIC LIVE — Listening 24/7..."
                         console.print(f"\n[bold bright_green]{status_prompt}[/bold bright_green]")
 
                 except Exception:

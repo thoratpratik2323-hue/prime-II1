@@ -94,6 +94,87 @@ def get_dynamic_welcome_message() -> str:
     return random.choice(templates)
 
 
+_STANDBY_MODE: bool = False
+
+
+def get_standby_mode() -> bool:
+    global _STANDBY_MODE
+    return _STANDBY_MODE
+
+
+def set_standby_mode(state: bool):
+    global _STANDBY_MODE
+    _STANDBY_MODE = state
+
+
+STANDBY_TRIGGER_PATTERNS = [
+    r"\bmeri\s+baat\s+mat\s+sun\b",
+    r"\bbaat\s+mat\s+sun\b",
+    r"\bchup\s+raho\b",
+    r"\bshant\s+raho\b",
+    r"\bmute\s+(ho\s+jao|hojao|yourself)\b",
+    r"\bso\s+jao\b",
+    r"\bstandby\b",
+    r"\bstand\s+by\b",
+    r"\bgo\s+to\s+sleep\b",
+    r"\bsleep\s+mode\b",
+    r"\bstop\s+listening\b",
+    r"\bdon'?t\s+listen\b",
+    r"\b(mic|mike)\s+band\s+(kar\s+do|kardo|karo)\b",
+    r"\bchup\s+baitho\b",
+    r"\bkuch\s+mat\s+sun\b",
+]
+
+
+def is_standby_command(text: str) -> bool:
+    """Check if the text is asking Prime to enter sleep/standby mode."""
+    lower = text.lower().strip()
+    return any(re.search(pat, lower) for pat in STANDBY_TRIGGER_PATTERNS)
+
+
+def is_hallucination_or_repetition(text: str) -> bool:
+    """Detect degenerate repetition loops common in Whisper/STT during ambient silence."""
+    words = re.findall(r'\b[a-zA-Z0-9_\u0900-\u097F]+\b', text.lower())
+    if len(words) < 5:
+        return False
+
+    # Check 1: Excessive identical consecutive words (e.g. "good good good good")
+    consecutive_repeats = 0
+    for i in range(1, len(words)):
+        if words[i] == words[i - 1]:
+            consecutive_repeats += 1
+            if consecutive_repeats >= 4:
+                return True
+        else:
+            consecutive_repeats = 0
+
+    # Check 2: Word diversity ratio on longer phrases
+    if len(words) >= 8:
+        unique_ratio = len(set(words)) / len(words)
+        if unique_ratio < 0.35:
+            return True
+
+    # Check 3: Repeated 2-word or 3-word n-gram loops
+    for n in (2, 3):
+        if len(words) >= n * 4:
+            grams = [tuple(words[i:i + n]) for i in range(len(words) - n + 1)]
+            from collections import Counter
+            counts = Counter(grams)
+            if any(count >= 4 for count in counts.values()):
+                return True
+
+    return False
+
+
+def sanitize_spoken_transcript(text: str) -> str:
+    """Sanitize frequent Marathi/Hindi phonetic transcription artifacts."""
+    # Replace 'abe mahato' / 'abe mhanto' with 'main bol raha hoon'
+    clean = re.sub(r'\b(abe\s+mahato|abe\s+mhanto)\b', 'main bol raha hoon', text, flags=re.IGNORECASE)
+    # Normalize 'dande' / 'dhande' to 'dhonde'
+    clean = re.sub(r'\b(bhagwat\s+)?(dande|dhande)\b', 'bhagwat dhonde', clean, flags=re.IGNORECASE)
+    return clean
+
+
 def play_chime(kind: str = "wake"):
     """Audible high-tech feedback tones."""
     try:
@@ -104,6 +185,14 @@ def play_chime(kind: str = "wake"):
             elif kind == "done":
                 winsound.Beep(1318, 70)
                 winsound.Beep(988, 90)
+            elif kind == "sleep":
+                winsound.Beep(880, 80)
+                winsound.Beep(659, 80)
+                winsound.Beep(523, 110)
+            elif kind == "resume":
+                winsound.Beep(523, 80)
+                winsound.Beep(659, 80)
+                winsound.Beep(880, 110)
     except Exception:
         pass
 
