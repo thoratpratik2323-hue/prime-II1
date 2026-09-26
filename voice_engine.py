@@ -190,12 +190,10 @@ class VoiceEngine:
 
                     # 2. If not Gemini or Gemini failed, try Edge-TTS Neural voice
                     if not played and curr.lower() != "david":
-                        if "multilingual" in curr.lower():
-                            edge_voice = curr
-                        elif is_hindi_or_hinglish(text) and "madhur" not in curr.lower() and "multilingual" not in curr.lower():
-                            edge_voice = "hi-IN-MadhurNeural"
+                        if is_hindi_or_hinglish(text):
+                            edge_voice = "hi-IN-SwaraNeural" if "female" in curr.lower() or "swara" in curr.lower() or "neerja" in curr.lower() else "hi-IN-MadhurNeural"
                         else:
-                            edge_voice = EDGE_NEURAL_VOICES.get(curr.lower(), curr if 'neural' in curr.lower() else 'en-US-BrianMultilingualNeural')
+                            edge_voice = EDGE_NEURAL_VOICES.get(curr.lower(), curr if 'neural' in curr.lower() else 'hi-IN-MadhurNeural')
                         played = loop.run_until_complete(self._speak_edge_tts(text, edge_voice))
 
                     # 3. Final Fallback: Offline pyttsx3 (Microsoft David)
