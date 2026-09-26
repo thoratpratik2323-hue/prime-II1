@@ -41,5 +41,7 @@ love_letter*.txt
 Desktop/Prime_*.txt
 data/whatsapp_session/
 data/contacts.json
+data/obsidian_organizer_cache.json
+logs/
 exports/*.zip
 

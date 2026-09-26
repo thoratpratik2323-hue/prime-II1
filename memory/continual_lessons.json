@@ -125,5 +125,19 @@
     "topic": "Tool Failure: sendWhatsAppMessage",
     "insight": "Command 'and we'll do that.' failed with args {}. Ensure parameters and fallback routing are validated.",
     "source": "trace_reflection_loop"
+  },
+  {
+    "id": 19,
+    "timestamp": "2026-09-26T01:34:49.197606",
+    "topic": "Tool Failure: sendWhatsAppMessage",
+    "insight": "Command 'send it details to you' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
+  },
+  {
+    "id": 20,
+    "timestamp": "2026-09-26T01:35:43.159179",
+    "topic": "Tool Failure: sendWhatsAppMessage",
+    "insight": "Command 'yes english first to my' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
   }
 ]
