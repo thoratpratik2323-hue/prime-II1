@@ -104,3 +104,20 @@ def send_whatsapp(target, message):
         
     threading.Thread(target=auto_send_worker, daemon=True).start()
     return f"WhatsApp transmission protocol initiated for contact '{target}', Sir."
+
+# =====================================================================
+# WhatsApp Voice & Video Calling and Scheduler Interop
+# =====================================================================
+try:
+    from whatsapp_manager import (
+        make_whatsapp_call,
+        accept_whatsapp_call,
+        reject_whatsapp_call,
+        end_whatsapp_call,
+        toggle_whatsapp_call_mute,
+        schedule_whatsapp_call,
+        list_scheduled_calls,
+        cancel_scheduled_call,
+    )
+except ImportError:
+    pass

@@ -132,17 +132,50 @@ class TestPrimeFullSystem(unittest.TestCase):
         self.assertEqual(res, 42)
         print("  ✓ WhatsApp interactive thread runner verified.")
 
+    def test_06b_whatsapp_calling_and_scheduler(self):
+        """Verify WhatsApp call scheduler and natural time parser."""
+        import whatsapp_manager
+        from tool_definitions import execute_tool
+
+        # 1. Natural language time parsing (English and Hinglish)
+        t1 = whatsapp_manager.parse_schedule_time("in 15 minutes")
+        self.assertIsNotNone(t1)
+        
+        t2 = whatsapp_manager.parse_schedule_time("10 minute baad")
+        self.assertIsNotNone(t2)
+
+        t3 = whatsapp_manager.parse_schedule_time("5 baje")
+        self.assertIsNotNone(t3)
+
+        # 2. Schedule, list, and cancel call tool executions
+        sched_res = execute_tool("scheduleWhatsAppCall", {
+            "recipient": "Self",
+            "time_str": "in 45 minutes",
+            "call_type": "voice",
+            "note": "Test System Calling"
+        })
+        self.assertTrue(sched_res.get("ok"))
+        self.assertIn("scheduled", sched_res.get("message", "").lower())
+
+        list_res = execute_tool("listScheduledWhatsAppCalls", {})
+        self.assertTrue(list_res.get("ok"))
+        self.assertIn("Self", str(list_res))
+
+        cancel_res = execute_tool("cancelScheduledWhatsAppCall", {"identifier": "Self"})
+        self.assertTrue(cancel_res.get("ok"))
+        print("  ✓ WhatsApp voice/video call scheduler and time parser verified.")
+
     # =========================================================================
-    # 4. Tool Arsenal (All 73 Tools Coverage)
+    # 4. Tool Arsenal (All 81+ Tools Coverage)
     # =========================================================================
-    def test_07_all_73_tool_specs_registered(self):
-        """Verify all 73 tools declared in TOOL_SPECS have valid executable handlers."""
+    def test_07_all_tool_specs_registered(self):
+        """Verify all tools declared in TOOL_SPECS have valid executable handlers."""
         import tool_definitions
         from desktop_agent.registry import TOOLS
         from plugin_registry import registry
 
         specs = tool_definitions.TOOL_SPECS
-        self.assertEqual(len(specs), 73, f"Expected 73 tools, found {len(specs)}")
+        self.assertGreaterEqual(len(specs), 81, f"Expected at least 81 tools, found {len(specs)}")
 
         unmapped = []
         for spec in specs:

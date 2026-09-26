@@ -4,7 +4,7 @@
 
 [![Windows OS](https://img.shields.io/badge/OS-Windows_11_%2F_10-0078D6?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Tests Passing](https://img.shields.io/badge/Tests-66%2F66_Passing-brightgreen?style=for-the-badge&logo=pytest)](https://github.com/thoratpratik2323-hue/prime-II1)
+[![Tests Passing](https://img.shields.io/badge/Tests-76%2F76_Passing-brightgreen?style=for-the-badge&logo=pytest)](https://github.com/thoratpratik2323-hue/prime-II1)
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini-Flash--Lite_Latest-4285F4?style=for-the-badge&logo=google)](https://aistudio.google.com)
 [![Groq LPU](https://img.shields.io/badge/Groq-500+_Tokens/sec-F55036?style=for-the-badge&logo=fastapi)](https://groq.com)
 [![Voice Model](https://img.shields.io/badge/Voice-Brian_Multilingual_+22%25-blueviolet?style=for-the-badge)](https://github.com/thoratpratik2323-hue/prime-II1)
@@ -36,9 +36,20 @@ From typing code, clicking buttons, controlling browsers, and managing files, to
 - **Modern AI Companion Voice:** Default spoken voice upgraded to **`en-US-BrianMultilingualNeural`** with speech rate boosted to **`+22%`** for crisp, natural, energetic delivery.
 - **Automatic Hindi & Hinglish Routing:** Uses `is_hindi_or_hinglish()` to dynamically route Devanagari Hindi or Hinglish phrases (*e.g. "bhai message bhej de", "kya chal raha hai", "namaste"*) directly to **`hi-IN-MadhurNeural`**, ensuring native Indian pronunciation without western accent distortion.
 
-### 2. 💬 Zero-Fail WhatsApp Automation Engine
-- **Desktop Isolation Bypass:** Background tasks operate in `WinSta0\exebox`. Prime's new `run_on_interactive_thread()` attaches a dedicated worker thread directly to the physical display station (`WinSta0\Default`).
+### 2. 💬 Zero-Fail WhatsApp Automation Engine & Full Calling Suite
+- **Desktop Isolation Bypass:** Background tasks operate in `WinSta0\exebox`. Prime's `run_on_interactive_thread()` attaches a dedicated worker thread directly to the physical display station (`WinSta0\Default`).
 - **Foreground Activation Lock Break:** Uses `EnumDesktopWindows` via native `user32.dll` combined with `AttachThreadInput` to forcefully bring active WhatsApp windows (Chrome WhatsApp Web or Desktop App) to the foreground.
+- **Voice & Video Calling Suite:** 
+  - Make outgoing voice or video calls (`makeWhatsAppCall`, e.g. *"WhatsApp call lagao Mummy ko"* or *"Video call Rohit"*).
+  - Call pickup / answer (`acceptWhatsAppCall`, e.g. *"Call pickup karo"* / *"Phone uthao"* via `Alt+A` / UI Automation).
+  - Call decline / reject (`rejectWhatsAppCall`, e.g. *"Call reject karo"* / *"Phone cut karo"* via `Alt+D` / UI Automation).
+  - Hang up active call (`endWhatsAppCall`, e.g. *"Call kaat do"* / *"Disconnect call"*).
+  - Mute / Unmute microphone (`toggleWhatsAppCallMute`, e.g. *"Mute kar do"* / `Ctrl+Shift+M`).
+- **Natural Language Call Scheduler:**
+  - Schedule WhatsApp calls (`scheduleWhatsAppCall`, e.g. *"10 minute baad Rohit ko call lagana"*, *"5 baje call schedule karo"*).
+  - Persistent storage in `data/scheduled_calls.json` with background daemon checking every 5 seconds.
+  - Spoken voice alert reminder and automatic dialer trigger when the scheduled time arrives.
+  - View and cancel scheduled calls (`listScheduledWhatsAppCalls`, `cancelScheduledWhatsAppCall`).
 - **Dual Hardware Enter Dispatch:** Automatically simulates physical scan-code `0x0D` and `pyautogui.press('enter')` to reliably dispatch messages.
 - **Address Book Sync:** Loaded and fuzzy searches across **115+ contacts** synced from `contacts.vcf`.
 
@@ -58,12 +69,12 @@ Integrated with the complete Agency Agent Roster (`agency_roster.py`), allowing 
 - **Design & UI/UX (16):** UI Designer, UX Architect, Whimsy Injector, Brand Guardian.
 - **Testing & QA (6):** Test Automation Engineer, Evidence Collector, API Tester, Reality Checker.
 
-### 5. 🧪 Comprehensive Test Suite (66 Passing Tests)
+### 5. 🧪 Comprehensive Test Suite (76 Passing Tests)
 Includes [`tests/test_prime_full_system.py`](tests/test_prime_full_system.py) which verifies:
 - Core configuration, single-instance mutex, and provider fallback ladders.
 - Spoken voice bilingual routing and speech rates.
-- WhatsApp phone normalization and interactive thread dispatch.
-- All 73 tool specifications and executable handlers.
+- WhatsApp phone normalization, interactive thread dispatch, calling tools, and call scheduler.
+- All 81 tool specifications and executable handlers.
 - Obsidian RAG Second Brain read/write capabilities.
 - 279 agency skills and intent router classification (<1ms fast-path).
 - Self-healing diagnostic audit (status: `HEALTHY`, 6/6 sub-tests passed in 9.82ms).
@@ -90,10 +101,11 @@ graph TD
     GH -.->|Offline| L[Local Ollama / Fallback]
 ```
 
-### 3. 🖱️ Complete Windows OS Dominion (73 Native Tools)
+### 3. 🖱️ Complete Windows OS Dominion (81 Native Tools)
 Prime interacts with Windows exactly like a human engineer:
-- **Mouse Control:** `mouseClick(x, y, button, clicks)`, `mouseMove(x, y, duration)`, `mouseScroll(clicks)`, `getCursorPosition()`
-- **Keyboard Execution:** `typeText(text, interval)`, `pressHotkey(keys)` (`["ctrl", "c"]`, `["alt", "tab"]`, `["win", "d"]`)
+- **WhatsApp Calling & Messaging:** `makeWhatsAppCall`, `acceptWhatsAppCall`, `rejectWhatsAppCall`, `endWhatsAppCall`, `toggleWhatsAppCallMute`, `scheduleWhatsAppCall`, `listScheduledWhatsAppCalls`, `cancelScheduledWhatsAppCall`, `sendWhatsAppMessage`, `listWhatsAppContacts`.
+- **Mouse Control:** `mouseClick(x, y, button, clicks)`, `mouseMove(x, y, duration)`, `mouseScroll(clicks)`, `getCursorPosition()`.
+- **Keyboard Execution:** `typeText(text, interval)`, `pressHotkey(keys)` (`["ctrl", "c"]`, `["alt", "tab"]`, `["win", "d"]`).
 - **Multimodal Screen Vision:** `analyzeScreenWithAI(prompt)` captures real-time high-res screen state and feeds it to Gemini Vision to inspect windows, errors, or websites.
 - **Shell & PowerShell:** `executePowerShell(command)`, `openPath(path)`, `listDrives()`, `manageProcess(action, name_or_pid)`.
 - **Window Management:** `listOpenWindows()`, `focusWindow(title)`.

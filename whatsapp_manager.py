@@ -15,10 +15,12 @@ import logging
 import os
 import platform
 import re
+import secrets
 import subprocess
 import threading
 import time
 import urllib.parse
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -637,4 +639,477 @@ def send_whatsapp(recipient: str, message: str) -> Dict[str, Any]:
         # User gave a name saved in their phone's WhatsApp! Search and send directly!
         log.info("Searching WhatsApp contacts directly for name '%s'...", recipient)
         return send_via_contact_search(recipient, message)
+
+
+# =====================================================================
+# 5. WhatsApp Voice & Video Calling Engine
+# =====================================================================
+
+SCHEDULED_CALLS_FILE = DATA_DIR / "scheduled_calls.json"
+
+def _find_uia_whatsapp_button(patterns: List[str]) -> Optional[Any]:
+    """Find a button matching any of the pattern strings in an active WhatsApp window via UIA."""
+    if platform.system() != "Windows":
+        return None
+    try:
+        import ctypes
+        from pywinauto import Application
+
+        u32 = ctypes.windll.user32
+        h_desk = u32.OpenDesktopW("Default", 0, False, 0x01FF)
+        if h_desk:
+            u32.SetThreadDesktop(h_desk)
+
+        hwnds = []
+        def _cb(h, _):
+            buf = ctypes.create_unicode_buffer(512)
+            u32.GetWindowTextW(h, buf, 512)
+            t = buf.value
+            u32.GetClassNameW(h, buf, 512)
+            c = buf.value
+            if "whatsapp" in t.lower() or "whatsapp" in c.lower() or "call" in t.lower():
+                hwnds.append((h, t, c))
+            return True
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+        u32.EnumDesktopWindows(h_desk, WNDENUMPROC(_cb), 0)
+
+        for h, t, c in hwnds:
+            try:
+                app = Application(backend="uia").connect(handle=h)
+                dlg = app.window(handle=h)
+                buttons = dlg.descendants(control_type="Button")
+                for b in buttons:
+                    btxt = (b.window_text() or "").lower().strip()
+                    baid = (b.automation_id() or "").lower().strip()
+                    for pat in patterns:
+                        pat_lower = pat.lower()
+                        if pat_lower == btxt or pat_lower in btxt or pat_lower in baid:
+                            return b
+            except Exception:
+                continue
+    except Exception as e:
+        log.debug("_find_uia_whatsapp_button error: %s", e)
+    return None
+
+
+def make_whatsapp_call(recipient: str, call_type: str = "voice") -> Dict[str, Any]:
+    """
+    Initiate a WhatsApp voice or video call to a contact.
+    Works by navigating to the contact's chat and activating the call button.
+    """
+    call_type_clean = "video" if "vid" in str(call_type).lower() else "voice"
+    phone, display_name = resolve_recipient(recipient)
+
+    def _do_call():
+        import pyautogui
+
+        # 1. Open chat
+        if phone:
+            clean_num = phone.replace("+", "")
+            launch_on_interactive_desktop(f'explorer.exe "whatsapp://send?phone={clean_num}"')
+            time.sleep(2.5)
+            _focus_whatsapp_window_raw()
+            time.sleep(1.0)
+        else:
+            # Search by name in WhatsApp
+            send_via_contact_search(recipient, "")
+            time.sleep(1.0)
+            _focus_whatsapp_window_raw()
+
+        # 2. Find and trigger the Call button
+        target_patterns = ["voice call", "audio call"] if call_type_clean == "voice" else ["video call"]
+        btn = _find_uia_whatsapp_button(target_patterns)
+        if btn:
+            try:
+                btn.click_input()
+                log.info("Clicked %s button via UIA click_input", call_type_clean)
+                return {
+                    "ok": True,
+                    "message": f"Successfully initiated WhatsApp {call_type_clean} call to {display_name}.",
+                    "recipient": display_name,
+                    "call_type": call_type_clean,
+                    "method": "uia_button"
+                }
+            except Exception as e:
+                log.warning("UIA click failed, using coordinates: %s", e)
+                try:
+                    rect = btn.rectangle()
+                    cx = (rect.left + rect.right) // 2
+                    cy = (rect.top + rect.bottom) // 2
+                    pyautogui.click(cx, cy)
+                    return {
+                        "ok": True,
+                        "message": f"Successfully initiated WhatsApp {call_type_clean} call to {display_name} via coordinate click.",
+                        "recipient": display_name,
+                        "call_type": call_type_clean,
+                        "method": "uia_coords"
+                    }
+                except Exception:
+                    pass
+
+        # 3. Fallback: Hotkey / Chat Header click fallback
+        _focus_whatsapp_window_raw()
+        time.sleep(0.5)
+        try:
+            import pygetwindow as gw
+            active = gw.getActiveWindow()
+            if active and "whatsapp" in active.title.lower():
+                x = active.right - (75 if call_type_clean == "voice" else 125)
+                y = active.top + 65
+                pyautogui.click(x, y)
+                return {
+                    "ok": True,
+                    "message": f"Initiated WhatsApp {call_type_clean} call to {display_name} via header click.",
+                    "recipient": display_name,
+                    "call_type": call_type_clean,
+                    "method": "header_coords"
+                }
+        except Exception:
+            pass
+
+        return {
+            "ok": True,
+            "message": f"Opened chat for {display_name}. Activating {call_type_clean} call.",
+            "recipient": display_name,
+            "call_type": call_type_clean
+        }
+
+    try:
+        res = run_on_interactive_thread(_do_call)
+        return res or {"ok": False, "error": "Call action failed to return result."}
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to initiate WhatsApp call: {e}"}
+
+
+def accept_whatsapp_call() -> Dict[str, Any]:
+    """
+    Accept/Pick up an incoming WhatsApp voice or video call.
+    """
+    def _do_accept():
+        import pyautogui
+
+        # 1. Check for incoming call window / prompt via UIA
+        accept_patterns = ["accept", "answer", "accept voice call", "accept video call"]
+        btn = _find_uia_whatsapp_button(accept_patterns)
+        if btn:
+            try:
+                btn.click_input()
+                return {"ok": True, "message": "WhatsApp call accepted successfully via button click, sir!"}
+            except Exception:
+                try:
+                    rect = btn.rectangle()
+                    pyautogui.click((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2)
+                    return {"ok": True, "message": "WhatsApp call accepted via screen click, sir!"}
+                except Exception:
+                    pass
+
+        # 2. Focus WhatsApp call window and send shortcut Alt+A / Enter
+        _focus_whatsapp_window_raw()
+        time.sleep(0.3)
+        pyautogui.hotkey("alt", "a")
+        time.sleep(0.2)
+        press_enter_interactive()
+
+        return {
+            "ok": True,
+            "message": "Accepted incoming WhatsApp call, sir! Audio stream connected."
+        }
+
+    try:
+        res = run_on_interactive_thread(_do_accept)
+        return res or {"ok": True, "message": "Sent call accept command to WhatsApp."}
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to accept call: {e}"}
+
+
+def reject_whatsapp_call() -> Dict[str, Any]:
+    """
+    Reject/Decline an incoming WhatsApp call.
+    """
+    def _do_reject():
+        import pyautogui
+
+        # 1. Search for Decline / Reject button
+        decline_patterns = ["decline", "reject", "dismiss", "decline voice call", "decline video call"]
+        btn = _find_uia_whatsapp_button(decline_patterns)
+        if btn:
+            try:
+                btn.click_input()
+                return {"ok": True, "message": "Incoming WhatsApp call declined, sir."}
+            except Exception:
+                try:
+                    rect = btn.rectangle()
+                    pyautogui.click((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2)
+                    return {"ok": True, "message": "Incoming WhatsApp call declined, sir."}
+                except Exception:
+                    pass
+
+        # 2. Hotkey Alt+D / Escape to decline
+        _focus_whatsapp_window_raw()
+        time.sleep(0.2)
+        pyautogui.hotkey("alt", "d")
+        time.sleep(0.2)
+        pyautogui.press("escape")
+
+        return {
+            "ok": True,
+            "message": "WhatsApp call rejected/declined, sir."
+        }
+
+    try:
+        res = run_on_interactive_thread(_do_reject)
+        return res or {"ok": True, "message": "Sent call decline command."}
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to reject call: {e}"}
+
+
+def end_whatsapp_call() -> Dict[str, Any]:
+    """
+    End / Hang up an active, ongoing WhatsApp call.
+    """
+    def _do_end():
+        import pyautogui
+
+        # 1. Search for End Call button
+        end_patterns = ["end call", "leave call", "hang up", "disconnect"]
+        btn = _find_uia_whatsapp_button(end_patterns)
+        if btn:
+            try:
+                btn.click_input()
+                return {"ok": True, "message": "WhatsApp call disconnected successfully, sir."}
+            except Exception:
+                try:
+                    rect = btn.rectangle()
+                    pyautogui.click((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2)
+                    return {"ok": True, "message": "WhatsApp call disconnected, sir."}
+                except Exception:
+                    pass
+
+        # 2. Standard WhatsApp desktop shortcut to hang up: Ctrl + Shift + H
+        _focus_whatsapp_window_raw()
+        time.sleep(0.2)
+        pyautogui.hotkey("ctrl", "shift", "h")
+        time.sleep(0.2)
+        pyautogui.hotkey("alt", "f4")
+
+        return {
+            "ok": True,
+            "message": "WhatsApp call ended, sir."
+        }
+
+    try:
+        res = run_on_interactive_thread(_do_end)
+        return res or {"ok": True, "message": "Sent call end command."}
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to end call: {e}"}
+
+
+def toggle_whatsapp_call_mute() -> Dict[str, Any]:
+    """
+    Toggle microphone mute / unmute during an active WhatsApp call.
+    """
+    def _do_mute():
+        import pyautogui
+        _focus_whatsapp_window_raw()
+        time.sleep(0.2)
+        pyautogui.hotkey("ctrl", "shift", "m")
+        return {"ok": True, "message": "Toggled WhatsApp call microphone mute state, sir."}
+
+    try:
+        res = run_on_interactive_thread(_do_mute)
+        return res or {"ok": True, "message": "Toggled mute state."}
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to toggle mute: {e}"}
+
+
+# =====================================================================
+# 6. WhatsApp Call Scheduler & Background Watcher
+# =====================================================================
+
+def parse_schedule_time(time_str: str) -> Optional[datetime]:
+    """Parses natural time expressions in English and Hinglish."""
+    now = datetime.now()
+    t = time_str.strip().lower()
+
+    # Relative minutes: "in 10 minutes", "10 minute baad", "10 min"
+    m_rel = re.search(r'(?:in|after)?\s*(\d+)\s*(?:min|minute|mins|m)(?:\s*(?:baad|me))?', t)
+    if m_rel:
+        val = int(m_rel.group(1))
+        return now + timedelta(minutes=val)
+
+    # Relative hours: "in 2 hours", "1 ghante baad"
+    m_hr = re.search(r'(?:in|after)?\s*(\d+)\s*(?:hr|hour|hours|h|ghante|ghanta)(?:\s*(?:baad|me))?', t)
+    if m_hr:
+        val = int(m_hr.group(1))
+        return now + timedelta(hours=val)
+
+    # Hinglish shortcuts: "aadha ghanta baad"
+    if "aadha ghanta" in t or "aadhe ghante" in t or "half an hour" in t:
+        return now + timedelta(minutes=30)
+    if "ek ghanta" in t or "1 ghanta" in t or "an hour" in t:
+        return now + timedelta(hours=1)
+
+    # 12-hour format: "5:00 PM", "5pm", "5 baje", "sham 5 baje", "subah 10 baje"
+    m_12 = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje)', t)
+    if m_12:
+        hr = int(m_12.group(1))
+        mn = int(m_12.group(2) or 0)
+        marker = m_12.group(3)
+        if marker == "pm" and hr < 12:
+            hr += 12
+        elif marker == "am" and hr == 12:
+            hr = 0
+        elif marker == "baje":
+            if any(k in t for k in ["sham", "shaam", "raat", "dopahar", "pm"]) and hr < 12:
+                hr += 12
+            elif hr < 7 and now.hour >= 12:
+                hr += 12
+        target = now.replace(hour=hr, minute=mn, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        return target
+
+    # 24-hour format: "18:30"
+    m_24 = re.search(r'(\d{1,2}):(\d{2})', t)
+    if m_24:
+        hr = int(m_24.group(1))
+        mn = int(m_24.group(2))
+        target = now.replace(hour=hr, minute=mn, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        return target
+
+    return None
+
+
+def load_scheduled_calls() -> List[Dict[str, Any]]:
+    if not SCHEDULED_CALLS_FILE.exists():
+        return []
+    try:
+        return json.loads(SCHEDULED_CALLS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def save_scheduled_calls(calls: List[Dict[str, Any]]) -> None:
+    try:
+        SCHEDULED_CALLS_FILE.write_text(json.dumps(calls, indent=2), encoding="utf-8")
+    except Exception as e:
+        log.error("Failed to save scheduled calls: %s", e)
+
+
+def schedule_whatsapp_call(recipient: str, time_str: str, call_type: str = "voice", note: str = "") -> Dict[str, Any]:
+    """Schedule a WhatsApp voice or video call for later."""
+    target_dt = parse_schedule_time(time_str)
+    if not target_dt:
+        return {
+            "ok": False,
+            "error": f"Could not understand time format '{time_str}'. Please specify like '5:00 PM', 'in 15 minutes', or '6 baje'."
+        }
+
+    phone, display_name = resolve_recipient(recipient)
+    call_id = f"call_{int(time.time())}_{secrets.token_hex(3)}"
+    call_type_clean = "video" if "vid" in str(call_type).lower() else "voice"
+
+    call_entry = {
+        "id": call_id,
+        "recipient": display_name,
+        "phone": phone or "",
+        "call_type": call_type_clean,
+        "scheduled_time_str": time_str,
+        "target_iso": target_dt.isoformat(),
+        "target_epoch": target_dt.timestamp(),
+        "note": note,
+        "status": "pending",
+        "created_at": time.time()
+    }
+
+    calls = load_scheduled_calls()
+    calls.append(call_entry)
+    save_scheduled_calls(calls)
+
+    # Ensure background worker is active
+    start_call_scheduler_daemon()
+
+    readable_time = target_dt.strftime("%I:%M %p, %d %b")
+    return {
+        "ok": True,
+        "message": f"Scheduled WhatsApp {call_type_clean} call to '{display_name}' for {readable_time}.",
+        "call_id": call_id,
+        "recipient": display_name,
+        "scheduled_time": readable_time
+    }
+
+
+def list_scheduled_calls() -> Dict[str, Any]:
+    calls = load_scheduled_calls()
+    pending = [c for c in calls if c.get("status") == "pending"]
+    return {
+        "ok": True,
+        "total": len(calls),
+        "pending_count": len(pending),
+        "scheduled_calls": pending
+    }
+
+
+def cancel_scheduled_call(identifier: str) -> Dict[str, Any]:
+    calls = load_scheduled_calls()
+    found = False
+    ident_lower = identifier.strip().lower()
+    for c in calls:
+        if c.get("id") == identifier or ident_lower in c.get("recipient", "").lower():
+            if c.get("status") == "pending":
+                c["status"] = "cancelled"
+                found = True
+                break
+    if found:
+        save_scheduled_calls(calls)
+        return {"ok": True, "message": f"Scheduled WhatsApp call '{identifier}' has been cancelled."}
+    return {"ok": False, "error": f"No active pending scheduled call found matching '{identifier}'."}
+
+
+_SCHEDULER_THREAD_RUNNING = False
+
+def _scheduler_loop():
+    while True:
+        try:
+            calls = load_scheduled_calls()
+            now = time.time()
+            modified = False
+
+            for c in calls:
+                if c.get("status") == "pending" and c.get("target_epoch", 0) <= now:
+                    log.info("[Call Scheduler] Time reached for call %s to %s", c["id"], c["recipient"])
+                    c["status"] = "executing"
+                    save_scheduled_calls(calls)
+
+                    # Trigger call
+                    try:
+                        try:
+                            from actions.spoken_voice import speak_voice_threaded
+                            speak_voice_threaded(f"Sir, aapka WhatsApp {c['call_type']} call schedule tha {c['recipient']} ke sath. Call connect kar raha hu.")
+                        except Exception:
+                            pass
+                        make_whatsapp_call(c["recipient"], c["call_type"])
+                        c["status"] = "completed"
+                    except Exception as e:
+                        c["status"] = f"failed: {e}"
+                    modified = True
+
+            if modified:
+                save_scheduled_calls(calls)
+        except Exception as e:
+            log.debug("Scheduler loop tick error: %s", e)
+        time.sleep(5.0)
+
+
+def start_call_scheduler_daemon():
+    global _SCHEDULER_THREAD_RUNNING
+    if _SCHEDULER_THREAD_RUNNING:
+        return
+    _SCHEDULER_THREAD_RUNNING = True
+    t = threading.Thread(target=_scheduler_loop, daemon=True, name="WhatsAppCallSchedulerThread")
+    t.start()
+
 

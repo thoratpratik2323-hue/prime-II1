@@ -758,6 +758,68 @@ TOOL_SPECS: List[Dict[str, Any]] = [
             "required": ["vcf_path"]
         }
     },
+    {
+        "name": "makeWhatsAppCall",
+        "description": "Initiate a WhatsApp voice or video call to any contact or phone number.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "recipient": {"type": "string", "description": "Contact name (e.g. 'Rahul', 'Mom', 'Priya') or phone number."},
+                "call_type": {"type": "string", "description": "'voice' (default) or 'video' call."}
+            },
+            "required": ["recipient"]
+        }
+    },
+    {
+        "name": "acceptWhatsAppCall",
+        "description": "Accept / pick up / answer an incoming WhatsApp voice or video call.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "rejectWhatsAppCall",
+        "description": "Reject / decline an incoming WhatsApp voice or video call.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "endWhatsAppCall",
+        "description": "End / hang up / disconnect an active ongoing WhatsApp call.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "toggleWhatsAppCallMute",
+        "description": "Toggle microphone mute / unmute during an active WhatsApp call.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "scheduleWhatsAppCall",
+        "description": "Schedule a WhatsApp voice or video call with a contact for a future time (e.g. '5:00 PM', 'in 15 minutes', '6 baje').",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "recipient": {"type": "string", "description": "Contact name or phone number."},
+                "time_str": {"type": "string", "description": "Scheduled time (e.g. '5:00 PM', 'in 30 mins', '18:00', '6 baje')."},
+                "call_type": {"type": "string", "description": "'voice' (default) or 'video'."},
+                "note": {"type": "string", "description": "Optional reminder note for the call."}
+            },
+            "required": ["recipient", "time_str"]
+        }
+    },
+    {
+        "name": "listScheduledWhatsAppCalls",
+        "description": "List all pending scheduled WhatsApp calls.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "cancelScheduledWhatsAppCall",
+        "description": "Cancel a pending scheduled WhatsApp call by recipient name or call ID.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "identifier": {"type": "string", "description": "Call ID or contact name to cancel."}
+            },
+            "required": ["identifier"]
+        }
+    },
 ]
 
 
@@ -1009,6 +1071,83 @@ def _handle_import_whatsapp_contacts(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"Failed to import contacts: {e}"}
 
 
+def _handle_make_whatsapp_call(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import make_whatsapp_call
+        recipient = str(args.get("recipient") or args.get("contact") or args.get("target") or "").strip()
+        call_type = str(args.get("call_type") or args.get("type") or "voice").strip()
+        if not recipient:
+            return {"ok": False, "error": "'recipient' is required to make a WhatsApp call."}
+        return make_whatsapp_call(recipient, call_type)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to initiate WhatsApp call: {e}"}
+
+
+def _handle_accept_whatsapp_call(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import accept_whatsapp_call
+        return accept_whatsapp_call()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to accept WhatsApp call: {e}"}
+
+
+def _handle_reject_whatsapp_call(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import reject_whatsapp_call
+        return reject_whatsapp_call()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to reject WhatsApp call: {e}"}
+
+
+def _handle_end_whatsapp_call(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import end_whatsapp_call
+        return end_whatsapp_call()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to end WhatsApp call: {e}"}
+
+
+def _handle_toggle_whatsapp_call_mute(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import toggle_whatsapp_call_mute
+        return toggle_whatsapp_call_mute()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to toggle mute: {e}"}
+
+
+def _handle_schedule_whatsapp_call(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import schedule_whatsapp_call
+        recipient = str(args.get("recipient") or args.get("contact") or "").strip()
+        time_str = str(args.get("time_str") or args.get("time") or "").strip()
+        call_type = str(args.get("call_type") or "voice").strip()
+        note = str(args.get("note") or "").strip()
+        if not recipient or not time_str:
+            return {"ok": False, "error": "'recipient' and 'time_str' are required to schedule a call."}
+        return schedule_whatsapp_call(recipient, time_str, call_type, note)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to schedule WhatsApp call: {e}"}
+
+
+def _handle_list_scheduled_calls(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import list_scheduled_calls
+        return list_scheduled_calls()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to list scheduled calls: {e}"}
+
+
+def _handle_cancel_scheduled_call(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import cancel_scheduled_call
+        ident = str(args.get("identifier") or args.get("call_id") or args.get("recipient") or "").strip()
+        if not ident:
+            return {"ok": False, "error": "'identifier' is required to cancel a scheduled call."}
+        return cancel_scheduled_call(ident)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to cancel scheduled call: {e}"}
+
+
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
     "getTime": _handle_time,
@@ -1041,6 +1180,21 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "setupWhatsAppWeb": _handle_setup_whatsapp_web,
     "readWhatsAppChats": _handle_read_whatsapp_chats,
     "importWhatsAppContacts": _handle_import_whatsapp_contacts,
+    "makeWhatsAppCall": _handle_make_whatsapp_call,
+    "make_whatsapp_call": _handle_make_whatsapp_call,
+    "whatsappCall": _handle_make_whatsapp_call,
+    "callWhatsApp": _handle_make_whatsapp_call,
+    "acceptWhatsAppCall": _handle_accept_whatsapp_call,
+    "pickupWhatsAppCall": _handle_accept_whatsapp_call,
+    "answerWhatsAppCall": _handle_accept_whatsapp_call,
+    "rejectWhatsAppCall": _handle_reject_whatsapp_call,
+    "declineWhatsAppCall": _handle_reject_whatsapp_call,
+    "endWhatsAppCall": _handle_end_whatsapp_call,
+    "hangupWhatsAppCall": _handle_end_whatsapp_call,
+    "toggleWhatsAppCallMute": _handle_toggle_whatsapp_call_mute,
+    "scheduleWhatsAppCall": _handle_schedule_whatsapp_call,
+    "listScheduledWhatsAppCalls": _handle_list_scheduled_calls,
+    "cancelScheduledWhatsAppCall": _handle_cancel_scheduled_call,
 }
 
 
