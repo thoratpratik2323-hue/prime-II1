@@ -52,6 +52,8 @@ data/plugin_cache.json
 data/remote_alerts.jsonl
 data/vector_memory_cache.json
 data/scheduled_calls.json
+data/voicemail_ledger.json
+config/dnd_state.json
 logs/
 exports/*.zip
 

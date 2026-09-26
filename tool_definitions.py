@@ -898,6 +898,112 @@ TOOL_SPECS: List[Dict[str, Any]] = [
             "required": ["title", "message"]
         }
     },
+    {
+        "name": "enableDNDMode",
+        "description": "Enable Do-Not-Disturb focus session to log calls and auto-respond with WhatsApp voicemail.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "reason": {"type": "string", "description": "Reason for focus session (e.g. 'Coding sprint', 'In a meeting')."}
+            }
+        }
+    },
+    {
+        "name": "disableDNDMode",
+        "description": "Disable Do-Not-Disturb focus session to take live calls.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "getWhatsAppCallLogs",
+        "description": "Retrieve recent incoming, missed, and auto-responded WhatsApp call logs.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Number of logs to retrieve (default: 15)."}
+            }
+        }
+    },
+    {
+        "name": "getClipboardHistory",
+        "description": "Retrieve history buffer of snippets copied to the Windows clipboard.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Number of items to return (default: 10)."}
+            }
+        }
+    },
+    {
+        "name": "explainClipboardSnippet",
+        "description": "Explain what is currently on the clipboard or in the specified code snippet/traceback.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Optional snippet text to explain; if omitted, inspects active clipboard."}
+            }
+        }
+    },
+    {
+        "name": "formatClipboardJson",
+        "description": "Parse, validate, and format JSON text currently on the clipboard.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Optional JSON string; if omitted, formats active clipboard."}
+            }
+        }
+    },
+    {
+        "name": "gitPreCommitAudit",
+        "description": "Perform pre-commit syntax, merge conflict, and secret leakage audit on working directory.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "gitSafeCommit",
+        "description": "Run pre-commit audit and commit changes safely with conventional commit message.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", "description": "Optional commit message. If omitted, auto-generates conventional message."}
+            }
+        }
+    },
+    {
+        "name": "generatePRSummary",
+        "description": "Generate formatted markdown summary for Pull Request including commits and changed files.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "base_branch": {"type": "string", "description": "Base branch to compare against (default: 'main')."}
+            }
+        }
+    },
+    {
+        "name": "generateMorningStandup",
+        "description": "Generate morning standup voice briefing with priorities, weather, battery, and calls.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "generateEveningDebrief",
+        "description": "Generate evening debrief voice wrap-up with today's git commits and completed tasks.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "getHardwareHealthAudit",
+        "description": "Audit CPU load, RAM usage, battery percent, thermal throttling, and power state.",
+        "parameters": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "setPowerProfile",
+        "description": "Set system power profile: 'performance', 'balanced', or 'eco'.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "profile": {"type": "string", "description": "Target profile: 'performance', 'balanced', or 'eco'."}
+            },
+            "required": ["profile"]
+        }
+    },
 ]
 
 
@@ -1302,6 +1408,118 @@ def _handle_send_remote_alert(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"Failed to send remote alert: {e}"}
 
 
+def _handle_enable_dnd_mode(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.whatsapp_voicemail import set_dnd_mode
+        reason = str(args.get("reason") or "Deep focus session").strip()
+        return set_dnd_mode(True, reason)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to enable DND: {e}"}
+
+
+def _handle_disable_dnd_mode(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.whatsapp_voicemail import set_dnd_mode
+        return set_dnd_mode(False)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to disable DND: {e}"}
+
+
+def _handle_get_call_logs(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.whatsapp_voicemail import get_call_logs
+        limit = int(args.get("limit") or 15)
+        return get_call_logs(limit)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to get call logs: {e}"}
+
+
+def _handle_get_clipboard_history(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.clipboard_sentinel import get_clipboard_history
+        limit = int(args.get("limit") or 10)
+        return get_clipboard_history(limit)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to get clipboard history: {e}"}
+
+
+def _handle_explain_clipboard_snippet(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.clipboard_sentinel import explain_clipboard_snippet
+        text = str(args.get("text") or "").strip()
+        return explain_clipboard_snippet(text)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to explain clipboard snippet: {e}"}
+
+
+def _handle_format_clipboard_json(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.clipboard_sentinel import format_clipboard_json
+        text = str(args.get("text") or "").strip()
+        return format_clipboard_json(text)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to format clipboard JSON: {e}"}
+
+
+def _handle_git_pre_commit_audit(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.git_sentinel import git_pre_commit_audit
+        return git_pre_commit_audit()
+    except Exception as e:
+        return {"ok": False, "error": f"Git pre-commit audit failed: {e}"}
+
+
+def _handle_git_safe_commit(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.git_sentinel import git_safe_commit
+        message = str(args.get("message") or "").strip()
+        return git_safe_commit(message)
+    except Exception as e:
+        return {"ok": False, "error": f"Git safe commit failed: {e}"}
+
+
+def _handle_generate_pr_summary(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.git_sentinel import generate_pr_summary
+        base = str(args.get("base_branch") or "main").strip()
+        return generate_pr_summary(base)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to generate PR summary: {e}"}
+
+
+def _handle_generate_morning_standup(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.standup_engine import generate_morning_standup
+        return generate_morning_standup()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to generate morning standup: {e}"}
+
+
+def _handle_generate_evening_debrief(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.standup_engine import generate_evening_debrief
+        return generate_evening_debrief()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to generate evening debrief: {e}"}
+
+
+def _handle_get_hardware_health_audit(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.thermal_guard import get_hardware_health_audit
+        return get_hardware_health_audit()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to audit hardware health: {e}"}
+
+
+def _handle_set_power_profile(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.thermal_guard import set_power_profile
+        profile = str(args.get("profile") or "balanced").strip()
+        return set_power_profile(profile)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to set power profile: {e}"}
+
+
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
     "getTime": _handle_time,
@@ -1355,6 +1573,19 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "crystallizeDevLog": _handle_crystallize_dev_log,
     "interceptTerminalError": _handle_intercept_terminal_error,
     "sendRemoteAlert": _handle_send_remote_alert,
+    "enableDNDMode": _handle_enable_dnd_mode,
+    "disableDNDMode": _handle_disable_dnd_mode,
+    "getWhatsAppCallLogs": _handle_get_call_logs,
+    "getClipboardHistory": _handle_get_clipboard_history,
+    "explainClipboardSnippet": _handle_explain_clipboard_snippet,
+    "formatClipboardJson": _handle_format_clipboard_json,
+    "gitPreCommitAudit": _handle_git_pre_commit_audit,
+    "gitSafeCommit": _handle_git_safe_commit,
+    "generatePRSummary": _handle_generate_pr_summary,
+    "generateMorningStandup": _handle_generate_morning_standup,
+    "generateEveningDebrief": _handle_generate_evening_debrief,
+    "getHardwareHealthAudit": _handle_get_hardware_health_audit,
+    "setPowerProfile": _handle_set_power_profile,
 }
 
 

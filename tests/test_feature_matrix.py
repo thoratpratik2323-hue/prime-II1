@@ -49,6 +49,11 @@ from ai_agent import agent
 import core.vector_memory as vector_memory
 import core.terminal_sentinel as terminal_sentinel
 import remote_bridge
+import core.whatsapp_voicemail as whatsapp_voicemail
+import core.clipboard_sentinel as clipboard_sentinel
+import core.git_sentinel as git_sentinel
+import core.standup_engine as standup_engine
+import core.thermal_guard as thermal_guard
 
 
 class TestPrimeFeatureMatrix(unittest.TestCase):
@@ -580,7 +585,151 @@ class TestPrimeFeatureMatrix(unittest.TestCase):
         res_audio = execute_tool("transcribeWhatsAppAudio", {"audio_path": "non_existent.ogg"})
         self.assertFalse(res_audio.get("ok"))
 
+    # =========================================================================
+    # 22. WhatsApp Voicemail & Auto-Responder Sentinel
+    # =========================================================================
+    def test_43_whatsapp_voicemail_and_dnd_lifecycle(self):
+        """Feature 43: DND focus mode toggle and automated voicemail call interception."""
+        # Enable DND
+        set_res = whatsapp_voicemail.set_dnd_mode(True, reason="Deep coding sprint")
+        self.assertTrue(set_res.get("ok"))
+        self.assertTrue(set_res.get("dnd_enabled"))
+
+        # Incoming call during DND -> auto_responded (test mode: don't dispatch live message)
+        call_res = whatsapp_voicemail.handle_voicemail_event("Rohan", call_type="voice", dispatch_message=False)
+        self.assertTrue(call_res.get("ok"))
+        self.assertEqual(call_res.get("action"), "auto_responded")
+        self.assertIn("Deep coding sprint", call_res.get("voicemail_text", ""))
+
+        # Retrieve call logs
+        logs_res = whatsapp_voicemail.get_call_logs(limit=5)
+        self.assertTrue(logs_res.get("ok"))
+        self.assertTrue(len(logs_res.get("calls", [])) > 0)
+
+        # Disable DND
+        dis_res = whatsapp_voicemail.set_dnd_mode(False)
+        self.assertTrue(dis_res.get("ok"))
+        self.assertFalse(dis_res.get("dnd_enabled"))
+
+    # =========================================================================
+    # 23. Intelligent Clipboard Memory & Auto-Explainer
+    # =========================================================================
+    def test_44_clipboard_sentinel_classification_and_explanation(self):
+        """Feature 44: Clipboard classification and instant explanation."""
+        sentinel = clipboard_sentinel.get_clipboard_sentinel()
+
+        # Test Classification
+        self.assertEqual(sentinel.classify_snippet("Traceback (most recent call last):\nValueError: bad"), "traceback")
+        self.assertEqual(sentinel.classify_snippet('{"key": "value", "count": 42}'), "json")
+        self.assertEqual(sentinel.classify_snippet("def add(a, b):\n    return a + b"), "python")
+        self.assertEqual(sentinel.classify_snippet("https://github.com"), "url")
+
+        # Test Explanation
+        explain_tb = sentinel.explain_snippet("Traceback (most recent call last):\nKeyError: 'user_id'")
+        self.assertTrue(explain_tb.get("ok"))
+        self.assertEqual(explain_tb.get("type"), "traceback")
+        self.assertEqual(explain_tb.get("error_name"), "KeyError")
+
+        # Test Format JSON
+        format_res = sentinel.format_json_clip('{"name":"Prime","status":"active"}')
+        self.assertTrue(format_res.get("ok"))
+
+    # =========================================================================
+    # 24. Autonomous Git Sentinel & Pre-Commit Quality Gate
+    # =========================================================================
+    def test_45_git_sentinel_pre_commit_audit(self):
+        """Feature 45: Pre-commit syntax, secret, and conflict checks."""
+        sentinel = git_sentinel.get_git_sentinel()
+
+        audit = sentinel.audit_pre_commit()
+        self.assertTrue(audit.get("ok"))
+        self.assertIsInstance(audit.get("passed"), bool)
+
+        # Test Smart Commit Message generator
+        msg = sentinel.generate_smart_commit_message(["core/test_module.py", "tests/test_feature.py"])
+        self.assertIn("feat:", msg)
+
+        # Test PR summary generator
+        pr = sentinel.generate_pr_summary(base_branch="main")
+        self.assertTrue(pr.get("ok"))
+        self.assertIn("Pull Request", pr.get("summary_markdown", ""))
+
+    # =========================================================================
+    # 25. Autonomous Standup & Evening Debrief Engine
+    # =========================================================================
+    def test_46_standup_and_debrief_engine(self):
+        """Feature 46: Morning standup voice synthesis and evening wrap-up debriefs."""
+        # Morning Standup
+        standup = standup_engine.generate_morning_standup()
+        self.assertTrue(standup.get("ok"))
+        self.assertIn("Good morning Sir!", standup.get("speech_script", ""))
+        self.assertIn("standup", standup)
+
+        # Evening Debrief
+        debrief = standup_engine.generate_evening_debrief()
+        self.assertTrue(debrief.get("ok"))
+        self.assertIn("Good evening Sir!", debrief.get("speech_script", ""))
+        self.assertIn("debrief", debrief)
+
+    # =========================================================================
+    # 26. Smart Hardware Thermal & Battery Power Guardian
+    # =========================================================================
+    def test_47_thermal_guard_audit_and_power_profile(self):
+        """Feature 47: System hardware telemetry audit and power profile switching."""
+        guard = thermal_guard.get_thermal_guard()
+
+        # Audit
+        audit = guard.get_health_audit()
+        self.assertTrue(audit.get("ok"))
+        self.assertIn(audit.get("status"), ["OPTIMAL", "WARNING", "CRITICAL"])
+        self.assertIn("metrics", audit)
+
+        # Power profile switching
+        eco_res = guard.set_power_profile("eco")
+        self.assertTrue(eco_res.get("ok"))
+        self.assertEqual(eco_res.get("profile"), "eco")
+
+        bal_res = guard.set_power_profile("balanced")
+        self.assertTrue(bal_res.get("ok"))
+        self.assertEqual(bal_res.get("profile"), "balanced")
+
+    # =========================================================================
+    # 27. Tool Dispatch Integration for All 5 New Upgrades
+    # =========================================================================
+    def test_48_upgrades_tools_dispatch_integration(self):
+        """Feature 48: Verification of execute_tool dispatch for all 5 new modules."""
+        # 1. DND
+        dnd_on = execute_tool("enableDNDMode", {"reason": "Test Session"})
+        self.assertTrue(dnd_on.get("ok"))
+        dnd_off = execute_tool("disableDNDMode", {})
+        self.assertTrue(dnd_off.get("ok"))
+
+        # 2. Call logs
+        call_logs = execute_tool("getWhatsAppCallLogs", {"limit": 3})
+        self.assertTrue(call_logs.get("ok"))
+
+        # 3. Clipboard tools
+        clip_explain = execute_tool("explainClipboardSnippet", {"text": "def compute(): pass"})
+        self.assertTrue(clip_explain.get("ok"))
+
+        # 4. Git Sentinel
+        git_audit = execute_tool("gitPreCommitAudit", {})
+        self.assertTrue(git_audit.get("ok"))
+
+        # 5. Standup & Debrief
+        m_standup = execute_tool("generateMorningStandup", {})
+        self.assertTrue(m_standup.get("ok"))
+        e_debrief = execute_tool("generateEveningDebrief", {})
+        self.assertTrue(e_debrief.get("ok"))
+
+        # 6. Thermal Guard
+        health = execute_tool("getHardwareHealthAudit", {})
+        self.assertTrue(health.get("ok"))
+        prof = execute_tool("setPowerProfile", {"profile": "performance"})
+        self.assertTrue(prof.get("ok"))
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
