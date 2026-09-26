@@ -30,9 +30,8 @@ def _get_base_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 def _get_api_key() -> str:
-    path = _get_base_dir() / "config" / "api_keys.json"
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
+    from config import config
+    return config.gemini_api_key
     
 def _get_desktop() -> Path:
     if _OS == "Linux":
@@ -87,24 +86,11 @@ def _build_sandbox() -> dict:
 
 
 def _execute_generated_code(code: str, player=None) -> str:
-    if not code or code.strip() == "UNSAFE":
-        return "This action cannot be performed safely."
-
-    # Kod temizleme
-    if code.startswith("```"):
-        lines = code.split("\n")
-        code  = "\n".join(lines[1:-1]).strip()
-
-    sandbox      = _build_sandbox()
-    output_lines = []
-    sandbox["__builtins__"]["print"] = lambda *a: output_lines.append(" ".join(str(x) for x in a))
-
-    try:
-        exec(compile(code, "<ipprime_desktop>", "exec"), sandbox)
-        return "\n".join(output_lines) if output_lines else "Done."
-    except Exception as e:
-        print(f"[Desktop] Exec error: {e}\nCode:\n{code[:300]}")
-        return f"Execution error: {e}"
+    """
+    Arbitrary exec() is disabled for security to eliminate RCE risk.
+    Delegates safe actions through Prime's typed desktop agent.
+    """
+    return "Arbitrary code execution via exec() has been disabled for security. Please use Prime's structured desktop agent tools."
 
 
 def _ask_gemini_for_desktop_action(task: str) -> str:

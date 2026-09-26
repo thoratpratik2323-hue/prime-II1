@@ -1,0 +1,43 @@
+# Prime AI — Python Dependencies
+# Python 3.10+ recommended (Tested on Python 3.12)
+
+# --- Core AI & LLM Providers ---
+google-genai>=0.1.0
+groq>=0.11.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
+# --- Voice, Audio & Speech ---
+edge-tts>=6.1.0
+pygame>=2.5.0
+sounddevice>=0.4.6
+SpeechRecognition>=3.10.0
+pyttsx3>=2.90
+
+# --- OS Automation, Desktop & Vision ---
+pyautogui>=0.9.54
+psutil>=5.9.0
+pywin32>=306; sys_platform == 'win32'
+pyperclip>=1.8.2
+Pillow>=10.0.0
+mss>=9.0.0
+opencv-python>=4.8.0
+playwright>=1.40.0
+Send2Trash>=1.8.2
+pygetwindow>=0.0.9; sys_platform == 'win32'
+pycaw>=20230407; sys_platform == 'win32'
+
+# --- Machine Learning & Intent Classification ---
+scikit-learn>=1.3.0
+numpy>=1.24.0
+
+# --- Web & API Services ---
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# --- CLI UI & Telemetry ---
+rich>=13.0.0
+colorama>=0.4.6

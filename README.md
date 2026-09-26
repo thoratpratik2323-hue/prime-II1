@@ -176,10 +176,16 @@ REQUIRE_WAKE_WORD=false
 
 ## 💻 How to Run
 
-### 1. Silent Background Service (Standard)
+### 1. Installation
+Install core dependencies using `requirements.txt`:
+```cmd
+pip install -r requirements.txt
+```
+
+### 2. Silent Ambient Background Mode
 Double-click `start-prime-background.vbs`. Prime runs silently in the background with ambient voice listening enabled.
 
-### 2. Interactive Neural Terminal Cockpit
+### 3. Interactive Neural Terminal Cockpit
 Run via Command Prompt or PowerShell:
 ```cmd
 start-prime.bat
@@ -189,13 +195,14 @@ or:
 python prime.py
 ```
 
-### 3. Run Test Suite
-To verify all 73 tools, voice routing, WhatsApp, and agency skills:
+### 4. Run Test Suites
+To verify security guardrails, all 73 tools, voice routing, WhatsApp, and agency skills:
 ```cmd
+python tests/test_security_guards.py
 python tests/test_prime_full_system.py
 ```
 
-### 4. CLI Commands & Hub
+### 5. CLI Commands & Hub
 Inside the cockpit:
 - `Type any prompt` — Talk directly to Prime
 - `/v` or `/mic` — Toggle microphone
@@ -207,10 +214,22 @@ Inside the cockpit:
 
 ---
 
-## 🔒 Security & Privacy
-- **100% Local Execution:** Desktop automation runs directly on your machine.
-- **Kernel Mutex Lock:** Guards against race conditions and audio stream hijacking.
-- **Zero Hardcoded Secrets:** All API keys and personal tokens are quarantined in `.env`.
+## 🔒 Security & Defense-in-Depth
+
+Prime AI incorporates enterprise-grade security guardrails against arbitrary code execution (RCE) and destructive system commands:
+
+- **Zero-Eval Architecture (`AST` Parsers):**
+  - Eliminated unsafe `eval()` and pseudo-sandboxed `exec()` across the codebase (`actions/safe_code_executor.py`, `actions/workflow_engine.py`, `actions/autonomous_autopilot.py`, and `actions/desktop.py`).
+  - Mathematical calculations and workflow conditions are evaluated strictly via Abstract Syntax Tree traversal without permitting Python attribute-chain escapes (`__subclasses__`).
+- **PowerShell Guardrails:**
+  - `executePowerShell` blocks dangerous commands attempting disk formatting (`format C:`), recursive Windows deletion, Defender tampering (`Set-MpPreference -DisableRealtimeMonitoring`), or shadow copy deletion (`vssadmin`).
+- **Core System Process Armor:**
+  - `manageProcess` refuses to terminate critical Windows kernel/subsystem processes (`csrss.exe`, `lsass.exe`, `services.exe`, `smss.exe`, `svchost.exe`, `winlogon.exe`).
+- **Protected File System Roots:**
+  - File operations (`deletePath`, `createFile`, `writeTextToFile`) reject operations targeting Windows system paths (`C:\Windows`, `C:\Program Files`, root `C:\`) even if bypass flags (`allow_anywhere=True`) are specified.
+- **Strict Credential Quarantine:**
+  - All API keys, environment files, and secret patterns are locked under `.gitignore`. No credentials ever leak to source control.
+- **Kernel Mutex Lock:** Guards against duplicate process instances, race conditions, and audio stream hijacking.
 
 ---
 

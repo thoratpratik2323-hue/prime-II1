@@ -124,6 +124,69 @@ def self_healing_refactor(file_path: str, instruction: str, max_attempts: int = 
 # ==========================================
 # 2. GUI Task Planner & Execution (PyAutoGUI)
 # ==========================================
+def _execute_safe_gui_statement(stmt: str, pyautogui_mod, time_mod) -> bool:
+    """
+    Safely executes a GUI statement using AST validation instead of arbitrary eval().
+    Only permits explicit pyautogui and time.sleep calls with literal arguments.
+    Strictly blocks attribute traversal, dunder methods, imports, and arbitrary expressions.
+    """
+    import ast
+    try:
+        parsed = ast.parse(stmt.strip())
+        if not parsed.body or len(parsed.body) != 1:
+            return False
+        expr = parsed.body[0]
+        if not isinstance(expr, ast.Expr) or not isinstance(expr.value, ast.Call):
+            return False
+        
+        call = expr.value
+        if not isinstance(call.func, ast.Attribute) or not isinstance(call.func.value, ast.Name):
+            return False
+        
+        target_mod = call.func.value.id
+        func_name = call.func.attr
+        
+        allowed_methods = {
+            "click", "moveTo", "move", "doubleClick", "rightClick", "middleClick",
+            "press", "write", "typewrite", "hotkey", "keyDown", "keyUp", "sleep", "scroll"
+        }
+        
+        if target_mod == "pyautogui" and func_name in allowed_methods:
+            func = getattr(pyautogui_mod, func_name, None)
+        elif target_mod == "time" and func_name == "sleep":
+            func = getattr(time_mod, "sleep", None)
+        else:
+            return False
+        
+        if not func or not callable(func):
+            return False
+        
+        safe_args = []
+        for arg in call.args:
+            if isinstance(arg, ast.Constant):
+                safe_args.append(arg.value)
+            elif isinstance(arg, ast.UnaryOp) and isinstance(arg.op, ast.USub) and isinstance(arg.operand, ast.Constant):
+                safe_args.append(-arg.operand.value)
+            else:
+                return False
+        
+        safe_kwargs = {}
+        for kw in call.keywords:
+            if not isinstance(kw.arg, str):
+                return False
+            if isinstance(kw.value, ast.Constant):
+                safe_kwargs[kw.arg] = kw.value.value
+            elif isinstance(kw.value, ast.UnaryOp) and isinstance(kw.value.op, ast.USub) and isinstance(kw.value.operand, ast.Constant):
+                safe_kwargs[kw.arg] = -kw.value.operand.value
+            else:
+                return False
+        
+        func(*safe_args, **safe_kwargs)
+        return True
+    except Exception:
+        return False
+
+
 def execute_gui_automation(nl_instructions: str, player=None) -> str:
     """Translates natural language GUI commands into safe PyAutoGUI python statements and executes them."""
     client = _get_gemini_client()
@@ -176,10 +239,11 @@ def execute_gui_automation(nl_instructions: str, player=None) -> str:
             pyautogui.PAUSE = 0.5
             
             for stmt in statements:
-                # Restrict execution to safe calls only
-                if stmt.strip().startswith(("pyautogui.", "time.sleep")):
-                    eval(stmt, {"pyautogui": pyautogui, "time": time})
+                # Restrict execution to safe validated calls only (zero eval)
+                if _execute_safe_gui_statement(stmt, pyautogui, time):
                     logs.append(f"- [OK] Executed: `{stmt}`")
+                else:
+                    logs.append(f"- [REJECTED (Unsafe/Invalid)]: `{stmt}`")
                     
             logs.append("\n✅ **GUI automation completed successfully, sir!**")
         except Exception as e:

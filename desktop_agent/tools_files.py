@@ -84,14 +84,34 @@ def _resolve_file(path: Optional[str], *, must_exist: bool = False) -> Path:
     return p
 
 
-def _ensure_safe(p: Path, allow_anywhere: bool = False) -> None:
+SYSTEM_FORBIDDEN_ROOTS = [
+    Path(os.environ.get("SystemRoot", "C:\\Windows")),
+    Path(os.environ.get("ProgramFiles", "C:\\Program Files")),
+    Path(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")),
+    Path("C:\\"),
+]
+
+
+def _ensure_safe(p: Path, allow_anywhere: bool = False, for_write_or_delete: bool = False) -> None:
+    real = str(p.resolve()).lower()
+
+    # Absolute restriction: Never write to or delete Windows system directories
+    if for_write_or_delete:
+        for sys_root in SYSTEM_FORBIDDEN_ROOTS:
+            try:
+                sys_real = str(sys_root.resolve()).lower()
+            except (OSError, ValueError):
+                continue
+            if real == sys_real or real.startswith(sys_real + os.sep) or real.startswith(sys_real + "/"):
+                raise ToolError(f"Access to protected Windows system path '{p}' is strictly forbidden.")
+
     if allow_anywhere:
         return
-    real = str(p.resolve()).lower()
+
     for root in SAFE_ROOTS:
         try:
             root_real = str(root.resolve()).lower()
-        except Exception:
+        except (OSError, ValueError):
             continue
         if real == root_real or real.startswith(root_real + os.sep) or real.startswith(root_real + "/"):
             return
@@ -108,7 +128,8 @@ def create_file(args: Dict[str, Any]) -> Dict[str, Any]:
     content = args.get("content", "")
     overwrite = bool(args.get("overwrite", False))
     p = _resolve_file(path)
-    _ensure_safe(p)
+    allow_anywhere = bool(args.get("allow_anywhere", False))
+    _ensure_safe(p, allow_anywhere=allow_anywhere, for_write_or_delete=True)
 
     if p.exists() and not overwrite:
         raise ToolError(
@@ -124,7 +145,7 @@ def read_file(args: Dict[str, Any]) -> Dict[str, Any]:
     path = args.get("path")
     max_chars = int(args.get("max_chars", 8000))
     p = _resolve_file(path, must_exist=True)
-    _ensure_safe(p)
+    _ensure_safe(p, allow_anywhere=bool(args.get("allow_anywhere", False)))
     try:
         text = p.read_text(encoding="utf-8", errors="replace")
     except UnicodeDecodeError:
@@ -141,9 +162,10 @@ def rename_file(args: Dict[str, Any]) -> Dict[str, Any]:
     if not new_name:
         raise ToolError("Parameter 'new_name' is required.")
     p = _resolve_file(path, must_exist=True)
-    _ensure_safe(p)
+    allow_anywhere = bool(args.get("allow_anywhere", False))
+    _ensure_safe(p, allow_anywhere=allow_anywhere, for_write_or_delete=True)
     target = (p.parent / str(new_name)).resolve()
-    _ensure_safe(target)
+    _ensure_safe(target, allow_anywhere=allow_anywhere, for_write_or_delete=True)
     if target.exists() and p.samefile(target):
         pass  # Allow case-only rename
     elif target.exists():
@@ -157,9 +179,15 @@ def delete_file(args: Dict[str, Any]) -> Dict[str, Any]:
     path = args.get("path")
     permanent = bool(args.get("permanent", False))
     p = _resolve_file(path, must_exist=True)
-    _ensure_safe(p)
+    allow_anywhere = bool(args.get("allow_anywhere", False))
+    _ensure_safe(p, allow_anywhere=allow_anywhere, for_write_or_delete=True)
 
     if permanent:
+        # Critical protection: Refuse permanent rmtree on system or user home roots
+        resolved_p = p.resolve()
+        if resolved_p in (HOME.resolve(), Path("C:\\").resolve(), Path("C:/").resolve()) or str(resolved_p).lower().startswith("c:\\windows"):
+            raise ToolError(f"Permanent deletion of protected root '{p}' is strictly prohibited.")
+
         if p.is_dir():
             import shutil
 

@@ -15,6 +15,35 @@ from typing import Any, Dict, List, Optional
 from .registry import ToolError, register
 
 
+DANGEROUS_SHELL_PATTERNS = [
+    r"set-mppreference\s+.*-disable",
+    r"stop-service\s+.*(?:windefend|mpssvc|securityhealth)",
+    r"\bformat\s+[a-zA-Z]:",
+    r"format-(?:volume|disk)\b",
+    r"(?:rd|rmdir)\s+.*(?:windows|system32)",
+    r"remove-item\s+.*(?:windows|system32)",
+    r"del(?:ete)?\s+.*(?:windows|system32)",
+    r"(?:iex|invoke-expression)\s*\(?(?:new-object\s+net\.webclient|invoke-webrequest)",
+    r"reg\s+save\s+hklm\\(?:sam|system|security)",
+    r"vssadmin\s+delete\s+shadows",
+]
+
+CRITICAL_SYSTEM_PROCESSES = {
+    "csrss.exe", "lsass.exe", "services.exe", "smss.exe", "svchost.exe",
+    "winlogon.exe", "system", "idle", "registry", "fontdrvhost.exe"
+}
+
+
+def _validate_powershell_safety(cmd: str) -> None:
+    import re
+    cmd_lower = cmd.lower().strip()
+    for pattern in DANGEROUS_SHELL_PATTERNS:
+        if re.search(pattern, cmd_lower):
+            raise ToolError(
+                "PowerShell command blocked by Prime Safety Guardrails: Destructive system tampering detected."
+            )
+
+
 @register("executePowerShell")
 def execute_powershell(args: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
@@ -29,6 +58,9 @@ def execute_powershell(args: Dict[str, Any] | None = None) -> Dict[str, Any]:
     cmd = args.get("command", "").strip()
     if not cmd:
         raise ToolError("'command' parameter is required for executePowerShell.")
+
+    # Apply safety validation
+    _validate_powershell_safety(cmd)
 
     timeout = int(args.get("timeout", 45))
 
@@ -183,8 +215,13 @@ def manage_process(args: Dict[str, Any] | None = None) -> Dict[str, Any]:
         killed_count = 0
         for p in matched:
             try:
+                proc_name = (p.name() or "").lower()
+                if proc_name in CRITICAL_SYSTEM_PROCESSES:
+                    raise ToolError(f"Cannot terminate protected Windows system process '{proc_name}'.")
                 p.kill()
                 killed_count += 1
+            except ToolError:
+                raise
             except Exception:
                 pass
 

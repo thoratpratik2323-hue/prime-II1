@@ -2,6 +2,12 @@
 .env
 .env.local
 *.env
+config/api_keys.json
+api_keys.json
+*.pem
+*.key
+credentials.json
+client_secret*.json
 
 # Python
 __pycache__/
@@ -42,6 +48,7 @@ Desktop/Prime_*.txt
 data/whatsapp_session/
 data/contacts.json
 data/obsidian_organizer_cache.json
+data/plugin_cache.json
 logs/
 exports/*.zip
 

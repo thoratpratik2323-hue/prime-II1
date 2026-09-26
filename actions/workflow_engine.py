@@ -112,15 +112,64 @@ class WorkflowEngine:
             return {"success": False, "error": str(e)}
     
     def _evaluate_condition(self, condition: str, context: Dict) -> bool:
-        """Evaluate a condition string."""
+        """Safely evaluate a condition string using AST comparison without eval()."""
+        import ast
+
         try:
-            # Simple variable substitution for safe evaluation
+            # Substitute context variables
             for key, value in context.items():
-                condition = condition.replace(f"{{{key}}}", str(value))
-            
-            # Evaluate the expression
-            return bool(eval(condition, {"__builtins__": {}}))
-        except:
+                condition = condition.replace(f"{{{key}}}", repr(value) if isinstance(value, str) else str(value))
+
+            tree = ast.parse(condition.strip(), mode='eval')
+
+            cmp_ops = {
+                ast.Eq: lambda a, b: a == b,
+                ast.NotEq: lambda a, b: a != b,
+                ast.Lt: lambda a, b: a < b,
+                ast.LtE: lambda a, b: a <= b,
+                ast.Gt: lambda a, b: a > b,
+                ast.GtE: lambda a, b: a >= b,
+                ast.In: lambda a, b: a in b,
+                ast.NotIn: lambda a, b: a not in b,
+            }
+
+            def _eval_node(node):
+                if isinstance(node, ast.Expression):
+                    return _eval_node(node.body)
+                elif isinstance(node, ast.Constant):
+                    return node.value
+                elif isinstance(node, ast.Name):
+                    if node.id in context:
+                        return context[node.id]
+                    elif node.id == "True":
+                        return True
+                    elif node.id == "False":
+                        return False
+                    elif node.id == "None":
+                        return None
+                    return False
+                elif isinstance(node, ast.Compare):
+                    left = _eval_node(node.left)
+                    for op, comparator in zip(node.ops, node.comparators):
+                        op_type = type(op)
+                        if op_type not in cmp_ops:
+                            return False
+                        right = _eval_node(comparator)
+                        if not cmp_ops[op_type](left, right):
+                            return False
+                        left = right
+                    return True
+                elif isinstance(node, ast.BoolOp):
+                    if isinstance(node.op, ast.And):
+                        return all(bool(_eval_node(val)) for val in node.values)
+                    elif isinstance(node.op, ast.Or):
+                        return any(bool(_eval_node(val)) for val in node.values)
+                elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+                    return not bool(_eval_node(node.operand))
+                return False
+
+            return bool(_eval_node(tree))
+        except Exception:
             return False
     
     def list_workflows(self) -> List[Dict]:
