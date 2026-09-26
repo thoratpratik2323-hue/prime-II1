@@ -132,6 +132,18 @@ def _execute_safe_gui_statement(stmt: str, pyautogui_mod, time_mod) -> bool:
     """
     import ast
     try:
+        from core.safe_exec import validate_ast, UnsafeCodeError
+        allowed_names = {"pyautogui", "time"}
+        allowed_attrs = {
+            "pyautogui": {
+                "click", "doubleClick", "rightClick", "middleClick", "moveTo", "move", "moveRel",
+                "dragTo", "hotkey", "typewrite", "write", "press", "scroll",
+                "screenshot", "position", "size", "keyDown", "keyUp",
+            },
+            "time": {"sleep"},
+        }
+        validate_ast(stmt, allowed_names, allowed_attrs)
+
         parsed = ast.parse(stmt.strip())
         if not parsed.body or len(parsed.body) != 1:
             return False

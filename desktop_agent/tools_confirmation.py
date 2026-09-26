@@ -18,7 +18,18 @@ from typing import Any, Dict
 from .registry import STATE, ToolError, register
 
 # Actions that can ONLY run after explicit confirmation.
-DANGEROUS_ACTIONS = {"shutdown", "restart", "sleep", "lock"}
+#
+# SECURITY: originally this only covered the power-state actions
+# (shutdown/restart/sleep/lock). That meant locking the screen required a
+# user confirmation but running arbitrary PowerShell, killing any process,
+# or permanently deleting a file did not — despite those being far more
+# consequential and exactly the kind of thing a prompt-injected webpage,
+# email, or message could try to trigger through the model with no human
+# in the loop. Gate those the same way.
+DANGEROUS_ACTIONS = {
+    "shutdown", "restart", "sleep", "lock",
+    "run_powershell", "kill_process", "delete_permanent",
+}
 
 # Friendly human labels so MYRAA's prompt-to-confirm reads naturally.
 ACTION_LABEL = {
@@ -26,6 +37,9 @@ ACTION_LABEL = {
     "restart": "restart the computer",
     "sleep": "put the computer to sleep",
     "lock": "lock the computer",
+    "run_powershell": "run that PowerShell command",
+    "kill_process": "terminate that process",
+    "delete_permanent": "permanently delete that file or folder (skipping the Recycle Bin)",
 }
 
 TOKEN_TTL_SECONDS = 60.0

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .registry import ToolError, register
+from .tools_confirmation import consume_token, request_power_action
 
 HOME = Path(os.path.expanduser("~"))
 
@@ -183,6 +184,11 @@ def delete_file(args: Dict[str, Any]) -> Dict[str, Any]:
     _ensure_safe(p, allow_anywhere=allow_anywhere, for_write_or_delete=True)
 
     if permanent:
+        token = args.get("execute_token")
+        if not token:
+            return request_power_action({"action": "delete_permanent"})
+        consume_token("delete_permanent", token)
+
         # Critical protection: Refuse permanent rmtree on system or user home roots
         resolved_p = p.resolve()
         if resolved_p in (HOME.resolve(), Path("C:\\").resolve(), Path("C:/").resolve()) or str(resolved_p).lower().startswith("c:\\windows"):

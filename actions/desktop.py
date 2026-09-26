@@ -86,11 +86,55 @@ def _build_sandbox() -> dict:
 
 
 def _execute_generated_code(code: str, player=None) -> str:
-    """
-    Arbitrary exec() is disabled for security to eliminate RCE risk.
-    Delegates safe actions through Prime's typed desktop agent.
-    """
-    return "Arbitrary code execution via exec() has been disabled for security. Please use Prime's structured desktop agent tools."
+    if not code:
+        return "No action code generated."
+
+    for pattern in _DANGEROUS_PATTERNS:
+        if re.search(pattern, code, re.IGNORECASE):
+            return "This action cannot be performed safely."
+
+    # Code cleaning
+    if code.startswith("```"):
+        lines = code.split("\n")
+        code = "\n".join(lines[1:-1]).strip()
+
+    from core.safe_exec import validate_ast, UnsafeCodeError
+
+    allowed_names = {"Path", "time", "shutil", "os_path"}
+    allowed_attrs = {
+        "Path": {"exists", "is_dir", "is_file", "iterdir", "glob", "name",
+                  "stem", "suffix", "parent", "stat", "resolve"},
+        "time": {"sleep", "time"},
+        "shutil": {"copy2", "copytree", "disk_usage"},
+        "os_path": {"join", "exists", "isdir", "isfile", "basename", "dirname"},
+    }
+    if _PYAUTOGUI:
+        allowed_names.add("pyautogui")
+        allowed_attrs["pyautogui"] = {
+            "click", "moveTo", "hotkey", "typewrite", "press", "scroll",
+            "position", "size", "screenshot",
+        }
+    if _OS == "Windows":
+        allowed_names.add("winreg")
+        allowed_attrs["winreg"] = {"OpenKey", "QueryValueEx", "HKEY_CURRENT_USER"}
+
+    try:
+        validate_ast(code, allowed_names, allowed_attrs)
+    except UnsafeCodeError as e:
+        print(f"[Desktop] Rejected unsafe generated code: {e}\nCode:\n{code[:300]}")
+        return f"This action was blocked by the code safety check: {e}"
+
+    sandbox = _build_sandbox()
+    output_lines = []
+    sandbox["__builtins__"]["print"] = lambda *a: output_lines.append(" ".join(str(x) for x in a))
+
+    try:
+        compiled = compile(code, "<desktop_agent>", "exec")
+        exec(compiled, sandbox)
+        return "\n".join(output_lines) if output_lines else "Action completed."
+    except Exception as e:
+        return f"Error executing action: {e}"
+
 
 
 def _ask_gemini_for_desktop_action(task: str) -> str:

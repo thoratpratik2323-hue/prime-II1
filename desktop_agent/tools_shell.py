@@ -13,6 +13,7 @@ import sys
 from typing import Any, Dict, List, Optional
 
 from .registry import ToolError, register
+from .tools_confirmation import consume_token, request_power_action
 
 
 DANGEROUS_SHELL_PATTERNS = [
@@ -61,6 +62,12 @@ def execute_powershell(args: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
     # Apply safety validation
     _validate_powershell_safety(cmd)
+
+    # Confirmation gating: requires explicit user confirmation
+    token = args.get("execute_token")
+    if not token:
+        return request_power_action({"action": "run_powershell"})
+    consume_token("run_powershell", token)
 
     timeout = int(args.get("timeout", 45))
 
@@ -190,6 +197,13 @@ def manage_process(args: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
     if not name and pid is None:
         raise ToolError("Either 'name' or 'pid' must be provided for manageProcess.")
+
+    # Confirmation gating: terminating a process requires user confirmation
+    if action != "info":
+        token = args.get("execute_token")
+        if not token:
+            return request_power_action({"action": "kill_process"})
+        consume_token("kill_process", token)
 
     try:
         import psutil

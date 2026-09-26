@@ -131,11 +131,64 @@ class TestSecurityGuards(unittest.TestCase):
         self.assertIn("Safety Guardrails", str(ctx3.exception))
 
     def test_process_manager_blocks_killing_system_processes(self):
-        """manage_process must reject terminating critical Windows processes."""
+        """manage_process must reject terminating critical Windows processes even with token."""
         for sys_proc in ["csrss.exe", "lsass.exe", "services.exe", "smss.exe", "winlogon.exe"]:
+            res = manage_process({"action": "kill", "name": sys_proc})
+            self.assertTrue(res.get("requires_confirmation"))
+            token = res["token"]
             with self.assertRaises(ToolError) as ctx:
-                manage_process({"action": "kill", "name": sys_proc})
+                manage_process({"action": "kill", "name": sys_proc, "execute_token": token})
             self.assertIn("Cannot terminate protected Windows system process", str(ctx.exception))
+
+    def test_confirmation_gating_powershell_and_process_and_delete(self):
+        """executePowerShell, manageProcess(kill), and deleteFile(permanent=True) must require confirmation token."""
+        # 1. PowerShell requires confirmation
+        res_ps = execute_powershell({"command": "Write-Output 'hello'"})
+        self.assertTrue(res_ps.get("requires_confirmation"))
+        self.assertIn("token", res_ps)
+
+        # 2. Process kill requires confirmation
+        res_proc = manage_process({"action": "kill", "name": "notepad.exe"})
+        self.assertTrue(res_proc.get("requires_confirmation"))
+        self.assertIn("token", res_proc)
+
+        # 3. Read-only process info does NOT require confirmation
+        res_info = manage_process({"action": "info", "name": "explorer.exe"})
+        self.assertNotIn("requires_confirmation", res_info)
+
+        # 4. Permanent delete requires confirmation
+        test_temp = Path.home() / "Desktop" / "prime_test_confirm_delete.tmp"
+        test_temp.write_text("test", encoding="utf-8")
+        try:
+            from desktop_agent.tools_files import delete_file
+            res_del = delete_file({"path": str(test_temp), "permanent": True})
+            self.assertTrue(res_del.get("requires_confirmation"))
+            self.assertIn("token", res_del)
+        finally:
+            if test_temp.exists():
+                test_temp.unlink()
+
+    def test_safe_exec_ast_allowlist(self):
+        """core/safe_exec.py validate_ast must block all sandbox escape constructs."""
+        from core.safe_exec import validate_ast, UnsafeCodeError
+        allowed_names = {"pyautogui", "time"}
+        allowed_attrs = {"pyautogui": {"click"}, "time": {"sleep"}}
+
+        # Valid
+        validate_ast("pyautogui.click(10, 20)", allowed_names, allowed_attrs)
+        validate_ast("time.sleep(1)", allowed_names, allowed_attrs)
+
+        # Escape attempt via dunder subclasses
+        with self.assertRaises(UnsafeCodeError):
+            validate_ast("().__class__.__bases__[0].__subclasses__()", allowed_names, allowed_attrs)
+
+        # Escape attempt via __import__
+        with self.assertRaises(UnsafeCodeError):
+            validate_ast("__import__('os').system('dir')", allowed_names, allowed_attrs)
+
+        # Escape attempt via getattr
+        with self.assertRaises(UnsafeCodeError):
+            validate_ast("getattr(time, 'sleep')", allowed_names, allowed_attrs)
 
     def test_file_tools_forbidden_system_roots(self):
         """_ensure_safe must refuse write/delete targeting core Windows system directories."""
@@ -157,3 +210,4 @@ class TestSecurityGuards(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
