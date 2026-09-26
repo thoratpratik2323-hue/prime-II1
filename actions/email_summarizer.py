@@ -141,7 +141,7 @@ def _summarize_emails_with_ai(emails: list, player=None) -> str:
         
         from google.genai import types
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=[prompt],
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,

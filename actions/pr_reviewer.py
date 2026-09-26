@@ -135,7 +135,7 @@ def review_pr(repo_name: str, pr_number: int) -> str:
         try:
             from google import genai
             genai.configure(api_key=gemini_api_key)
-            model = genai.GenerativeModel("gemini-2.0-flash")
+            model = genai.GenerativeModel("gemini-2.5-flash")
             
             prompt = (
                 f"Analyze the following code diff for Pull Request '{pr_title}':\n\n"

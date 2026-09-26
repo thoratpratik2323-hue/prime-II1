@@ -95,7 +95,7 @@ class ContextCompressor:
             return f"[Context Summary] {text[-500:]}"
         try:
             resp = self._client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=[
                     {"role": "user", "parts": [{
                         "text": (

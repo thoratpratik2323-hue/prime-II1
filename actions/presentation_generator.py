@@ -59,7 +59,7 @@ def generate_presentation_from_topic(topic: str, slide_count: int = 5, player: O
                 warnings.filterwarnings("ignore", category=FutureWarning)
                 import google.generativeai as genai
             genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel("gemini-2.0-flash")
+            model = genai.GenerativeModel("gemini-2.5-flash")
             
             prompt = (
                 f"You are a professional presentation designer. Create a PowerPoint outline for the topic: '{topic}'. "

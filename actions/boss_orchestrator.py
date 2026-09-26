@@ -62,18 +62,15 @@ def boss_orchestrator(parameters: dict, player=None) -> str:
         # Simple helper to run async function synchronously or inside running loop
         def run_async(coro):
             try:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
             except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            
-            if loop.is_running():
-                # If running inside a server or PyQt loop, run via run_coroutine_threadsafe
-                import threading
+                loop = None
+
+            if loop and loop.is_running():
                 fut = asyncio.run_coroutine_threadsafe(coro, loop)
                 return fut.result()
             else:
-                return loop.run_until_complete(coro)
+                return asyncio.run(coro)
 
         for idx, step in enumerate(steps):
             tool_name = step.get("tool")

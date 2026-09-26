@@ -154,7 +154,7 @@ def get_weekly_summary() -> str:
                 "3) A motivational advice line in Hinglish. Keep it warm and concise."
             )
             res = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=prompt
             )
             return f"### [WEEKLY JOURNAL REVIEW]\n\n{res.text.strip()}\n\nAll secure sir!"
