@@ -149,6 +149,26 @@ def normalize_phone_number(raw: str) -> str:
         return f"+{digits_only}"
 
 
+VOICE_RECIPIENT_ALIASES: Dict[str, str] = {
+    "yome": "yome",
+    "yomi": "yome",
+    "yom": "yome",
+    "yummy": "yome",
+    "yomee": "yome",
+    "yo me": "yome",
+    "you me": "yome",
+    "yome.": "yome",
+    "bappu": "bappu",
+    "papa": "bappu",
+    "dad": "bappu",
+    "father": "bappu",
+    "mummy": "mummy",
+    "mom": "mummy",
+    "maa": "mummy",
+    "mumma": "mummy",
+}
+
+
 def resolve_recipient(target: str) -> Tuple[Optional[str], str]:
     """
     Resolve recipient from either contact name or phone number.
@@ -158,33 +178,64 @@ def resolve_recipient(target: str) -> Tuple[Optional[str], str]:
     target_clean = target.strip()
     target_lower = target_clean.lower()
 
+    # Normalize punctuation-stripped version
+    target_norm = re.sub(r"[^\w\s]", "", target_lower).strip()
+
+    # 1. Check Voice/Phonetic Aliases first
+    if target_lower in VOICE_RECIPIENT_ALIASES:
+        canonical = VOICE_RECIPIENT_ALIASES[target_lower]
+        if canonical in contacts:
+            return contacts[canonical], canonical.title()
+    if target_norm in VOICE_RECIPIENT_ALIASES:
+        canonical = VOICE_RECIPIENT_ALIASES[target_norm]
+        if canonical in contacts:
+            return contacts[canonical], canonical.title()
+
+    # 2. Exact match in contacts (raw or normalized)
     if target_lower in contacts:
         return contacts[target_lower], target_clean
 
-    # Clean repeated words / speech recognition stutter (e.g. "om om" -> "om")
-    words = [w for w in target_lower.split() if w not in ("to", "tu", "ko", "se", "send", "message", "msg")]
+    for name, num in contacts.items():
+        name_clean = re.sub(r"[^\w\s]", "", name.lower()).strip()
+        if target_norm == name_clean:
+            return num, name.title()
+
+    # 3. Clean common conversational postpositions / filler words
+    words = [w for w in target_norm.split() if w not in ("to", "tu", "ko", "se", "send", "message", "msg", "the", "my")]
     for w in words:
+        if w in VOICE_RECIPIENT_ALIASES:
+            canonical = VOICE_RECIPIENT_ALIASES[w]
+            if canonical in contacts:
+                return contacts[canonical], canonical.title()
         if w in contacts:
             return contacts[w], w.title()
+        for name, num in contacts.items():
+            name_clean = re.sub(r"[^\w\s]", "", name.lower()).strip()
+            if w == name_clean:
+                return num, name.title()
 
-    # Check exact word boundaries
+    # 4. Check whole word boundary match (do NOT match arbitrary short substrings like 'om' inside 'yome')
     for name, num in contacts.items():
-        if f" {name} " in f" {target_lower} " or f" {target_lower} " in f" {name} ":
+        name_clean = re.sub(r"[^\w\s]", "", name.lower()).strip()
+        pattern = r"\b" + re.escape(target_norm) + r"\b"
+        if re.search(pattern, name_clean):
             return num, name.title()
 
-    # Substring check in contacts
-    for name, num in contacts.items():
-        if target_lower in name or name in target_lower:
-            return num, name.title()
+    # 5. Whole contact name contains full target query if target query is at least 3 letters
+    if len(target_norm) >= 3:
+        for name, num in contacts.items():
+            name_clean = re.sub(r"[^\w\s]", "", name.lower()).strip()
+            if target_norm in name_clean:
+                return num, name.title()
 
-    # Difflib close match
+    # 6. Difflib close match (cutoff=0.75 to prevent false matches)
     import difflib
-    close = difflib.get_close_matches(target_lower, list(contacts.keys()), n=1, cutoff=0.7)
+    close = difflib.get_close_matches(target_norm, list(contacts.keys()), n=1, cutoff=0.75)
     if close:
         matched = close[0]
         return contacts[matched], matched.title()
 
-    # Check if target is directly a phone number
+    # 7. Check if target is directly a phone number
     if re.search(r"\d{7,}", target_clean):
         norm = normalize_phone_number(target_clean)
         return norm, norm
