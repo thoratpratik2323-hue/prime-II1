@@ -233,18 +233,38 @@ def resolve_recipient(target: str) -> Tuple[Optional[str], str]:
             set_last_mentioned_contact(name)
             return num, name.title()
 
-    # 3. Clean common conversational postpositions / filler words
-    words = [w for w in target_norm.split() if w not in ("to", "tu", "ko", "se", "send", "message", "msg", "the", "my")]
+    # 3. Clean common conversational postpositions / filler words from phrase & tokens
+    STOP_WORDS = ("to", "tu", "ko", "la", "se", "ne", "ka", "ki", "ke", "na", "kade", "chya", "var", "send", "message", "msg", "the", "my", "open", "chat", "call")
+    words = [w for w in target_norm.split() if w not in STOP_WORDS]
+    cleaned_phrase = " ".join(words).strip()
+    if cleaned_phrase and cleaned_phrase != target_norm:
+        if cleaned_phrase in VOICE_RECIPIENT_ALIASES:
+            canonical = VOICE_RECIPIENT_ALIASES[cleaned_phrase]
+            if canonical in contacts:
+                set_last_mentioned_contact(canonical)
+                return contacts[canonical], canonical.title()
+        if cleaned_phrase in contacts:
+            set_last_mentioned_contact(cleaned_phrase)
+            return contacts[cleaned_phrase], cleaned_phrase.title()
+        for name, num in contacts.items():
+            name_clean = re.sub(r"[^\w\s]", "", name.lower()).strip()
+            if cleaned_phrase == name_clean:
+                set_last_mentioned_contact(name)
+                return num, name.title()
+
     for w in words:
         if w in VOICE_RECIPIENT_ALIASES:
             canonical = VOICE_RECIPIENT_ALIASES[w]
             if canonical in contacts:
+                set_last_mentioned_contact(canonical)
                 return contacts[canonical], canonical.title()
         if w in contacts:
+            set_last_mentioned_contact(w)
             return contacts[w], w.title()
         for name, num in contacts.items():
             name_clean = re.sub(r"[^\w\s]", "", name.lower()).strip()
             if w == name_clean:
+                set_last_mentioned_contact(name)
                 return num, name.title()
 
     # 4. Check whole word boundary match (do NOT match arbitrary short substrings like 'om' inside 'yome')

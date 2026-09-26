@@ -159,7 +159,7 @@ class AIAgent:
                             config=types.GenerateContentConfig(
                                 system_instruction=self.get_system_prompt(),
                                 tools=get_gemini_tools(),
-                                temperature=0.7,
+                                temperature=0.1,
                             ),
                         )
                         self._current_gemini_model = m
@@ -340,9 +340,20 @@ class AIAgent:
                     if on_tool_result:
                         on_tool_result(fn_name, exec_res)
 
+                    # Self-Correction & High-Accuracy feedback
+                    if isinstance(exec_res, dict) and not exec_res.get("ok", True):
+                        err_msg = exec_res.get("error", "Execution failed")
+                        res_payload = {
+                            "ok": False,
+                            "error": err_msg,
+                            "self_correction_guidance": f"Tool '{fn_name}' execution failed: {err_msg}. Review parameters, correct any invalid arguments, or call an alternative tool now to fulfill the user request."
+                        }
+                    else:
+                        res_payload = {"result": exec_res.get("result", exec_res)}
+
                     tool_results.append(types.Part.from_function_response(
                         name=fn_name,
-                        response={"result": exec_res.get("result", exec_res)},
+                        response=res_payload,
                     ))
 
                 # Send tool responses turn
@@ -374,7 +385,7 @@ class AIAgent:
                         config=types.GenerateContentConfig(
                             system_instruction=self.get_system_prompt(),
                             tools=get_gemini_tools(),
-                            temperature=0.7,
+                            temperature=0.1,
                         ),
                     )
                     self._current_gemini_model = "gemini-3.1-flash-lite"
@@ -397,7 +408,16 @@ class AIAgent:
         tools = get_openai_tools()
 
         user_message = {"role": "user", "content": user_input}
-        messages = [{"role": "system", "content": self.get_system_prompt()}] + self.history[-10:] + [user_message]
+
+        # Dynamic Execution Accuracy Directive injection
+        from core.intent_router import classify_intent, get_accuracy_directive
+        intent = classify_intent(user_input)
+        directive = get_accuracy_directive(intent)
+        system_content = self.get_system_prompt()
+        if directive:
+            system_content += f"\n\n=========================================\nREAL-TIME EXECUTION ACCURACY DIRECTIVE ({intent})\n=========================================\n{directive}\n"
+
+        messages = [{"role": "system", "content": system_content}] + self.history[-10:] + [user_message]
 
         try:
             max_iterations = 6
@@ -407,6 +427,7 @@ class AIAgent:
                     messages=messages,
                     tools=tools,
                     tool_choice="auto",
+                    temperature=0.1,
                     timeout=6.0,
                 )
                 if not resp.choices:
@@ -443,11 +464,22 @@ class AIAgent:
                     if on_tool_result:
                         on_tool_result(fn_name, exec_res)
 
+                    # Self-Correction & High-Accuracy feedback
+                    if isinstance(exec_res, dict) and not exec_res.get("ok", True):
+                        err_msg = exec_res.get("error", "Execution failed")
+                        res_content = {
+                            "ok": False,
+                            "error": err_msg,
+                            "self_correction_guidance": f"Tool '{fn_name}' execution failed: {err_msg}. Review parameters, correct any invalid arguments, or call an alternative tool now to fulfill the user request."
+                        }
+                    else:
+                        res_content = exec_res
+
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
                         "name": fn_name,
-                        "content": json.dumps(exec_res),
+                        "content": json.dumps(res_content),
                     })
 
             final_text = "Action completed."

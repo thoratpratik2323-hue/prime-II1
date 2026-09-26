@@ -7,6 +7,8 @@ and handles execution of tool calls.
 from __future__ import annotations
 
 import logging
+import os
+import re
 from typing import Any, Dict, List
 
 # Ensure desktop_agent package is on sys.path
@@ -1662,17 +1664,31 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     if name.lower() in alias_map:
         name = alias_map[name.lower()]
 
-    # --- Argument Normalization ---
+    # --- Universal Argument Normalization ---
     import os
     arg_mappings = {
         'createPythonFile': [('filename', 'path'), ('code', 'content')],
-        'openFolder': [('folder', 'path')],
-        'saveScreenshot': [('filename', 'name')],
+        'createFile': [('filename', 'path'), ('name', 'path'), ('file_path', 'path'), ('filepath', 'path'), ('code', 'content'), ('body', 'content'), ('text', 'content')],
+        'readFile': [('filename', 'path'), ('name', 'path'), ('file_path', 'path'), ('filepath', 'path')],
+        'openFolder': [('folder', 'path'), ('dir', 'path'), ('directory', 'path')],
+        'saveScreenshot': [('filename', 'name'), ('file', 'name')],
         'patchCodeFile': [('path', 'file_path'), ('target', 'search_content'), ('replacement', 'replace_content')],
         'debugCodeFile': [('path', 'file_path'), ('trace', 'error_trace')],
-        'runUnitTests': [('test_path', 'path')],
-        'sendWhatsAppMessage': [('to', 'recipient'), ('contact', 'recipient'), ('phone', 'recipient'), ('text', 'message'), ('body', 'message')],
-        'saveWhatsAppContact': [('phone', 'phone_number'), ('number', 'phone_number')],
+        'runUnitTests': [('test_path', 'path'), ('file', 'path')],
+        'sendWhatsAppMessage': [('to', 'recipient'), ('contact', 'recipient'), ('phone', 'recipient'), ('target', 'recipient'), ('text', 'message'), ('body', 'message'), ('msg', 'message')],
+        'openWhatsAppChat': [('to', 'recipient'), ('contact', 'recipient'), ('phone', 'recipient'), ('target', 'recipient'), ('name', 'recipient')],
+        'makeWhatsAppCall': [('to', 'recipient'), ('contact', 'recipient'), ('phone', 'recipient'), ('target', 'recipient'), ('name', 'recipient')],
+        'saveWhatsAppContact': [('phone', 'phone_number'), ('number', 'phone_number'), ('contact_name', 'name')],
+        'searchGoogle': [('q', 'query'), ('search', 'query'), ('term', 'query'), ('topic', 'query')],
+        'searchYouTube': [('q', 'query'), ('search', 'query'), ('term', 'query'), ('topic', 'query'), ('song', 'query'), ('video', 'query')],
+        'searchWeb': [('q', 'query'), ('search', 'query'), ('term', 'query')],
+        'openWebsite': [('link', 'url'), ('address', 'url'), ('site', 'url'), ('target', 'url')],
+        'openApplication': [('app', 'name'), ('application', 'name'), ('program', 'name')],
+        'mediaControl': [('command', 'action')],
+        'spotifyControl': [('command', 'action')],
+        'writeObsidianNote': [('name', 'title'), ('text', 'content'), ('body', 'content')],
+        'readObsidianNote': [('name', 'title')],
+        'quickNote': [('title', 'note'), ('text', 'note'), ('content', 'note')],
     }
     for src, dst in arg_mappings.get(name, []):
         if src in args and dst not in args:
@@ -1709,13 +1725,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         except Exception:
             pass
 
+    # Normalized clean name for morphological matching (strips underscores, hyphens, casing)
+    norm_name = re.sub(r'[^a-zA-Z0-9]', '', name).lower()
+
     # 1. Check Built-in specialized handlers ($O(1)$)
     builtin_handler = BUILTIN_TOOL_DISPATCH.get(name)
     if not builtin_handler:
-        # Case-insensitive fallback
-        name_lower = name.lower()
+        # Morphological / case-insensitive fallback for built-in handlers
         for k, v in BUILTIN_TOOL_DISPATCH.items():
-            if k.lower() == name_lower:
+            if re.sub(r'[^a-zA-Z0-9]', '', k).lower() == norm_name:
                 builtin_handler = v
                 break
 
@@ -1723,10 +1741,19 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         return builtin_handler(args)
 
     # 2. Check Desktop Agent tools ($O(1)$)
+    target_tool_fn = None
     if name in TOOLS:
-        handler = TOOLS[name]
+        target_tool_fn = TOOLS[name]
+    else:
+        # Morphological / case-insensitive fallback for desktop agent tools
+        for k, v in TOOLS.items():
+            if re.sub(r'[^a-zA-Z0-9]', '', k).lower() == norm_name:
+                target_tool_fn = v
+                break
+
+    if target_tool_fn:
         try:
-            res = handler(args)
+            res = target_tool_fn(args)
             if isinstance(res, dict) and list(res.keys()) == ['result']:
                 res = res['result']
             return {"ok": True, "result": res}
