@@ -64,6 +64,22 @@ def is_hindi_or_hinglish(text: str) -> bool:
     return bool(words & hinglish_markers)
 
 
+BARGE_IN_KEYWORDS = (
+    "stop", "ruko", "chup", "pause", "wait", "hold on", "shant", "ek second",
+    "bas", "quiet", "shut up", "mat bolo", "ruk jao", "cancel"
+)
+
+
+def check_barge_in_phrase(text: str) -> bool:
+    """Detect if an incoming voice utterance is a speech interruption command."""
+    if not text:
+        return False
+    t = text.lower().strip()
+    return any(
+        k == t or t.startswith(k + " ") or t.endswith(" " + k) or f" {k} " in t
+        for k in BARGE_IN_KEYWORDS
+    )
+
 
 class VoiceEngine:
     def __init__(self):
@@ -483,6 +499,12 @@ class VoiceEngine:
                 pygame.mixer.music.stop()
         except Exception:
             pass
+
+    def barge_in(self) -> bool:
+        """Full-Duplex Barge-in: Immediately interrupt ongoing and queued speech."""
+        was_speaking = self._is_speaking or not self.tts_queue.empty()
+        self.stop_speaking()
+        return was_speaking
 
     def _sanitize_for_tts(self, text: str) -> str:
         if not isinstance(text, str):

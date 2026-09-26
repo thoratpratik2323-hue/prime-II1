@@ -820,6 +820,84 @@ TOOL_SPECS: List[Dict[str, Any]] = [
             "required": ["identifier"]
         }
     },
+    {
+        "name": "searchSecondBrainSemantic",
+        "description": "Perform semantic vector TF-IDF & cosine similarity search across Obsidian Vault knowledge base.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The natural language query or concept to search semantically."},
+                "top_k": {"type": "integer", "description": "Maximum number of relevant notes to return (default: 5)."}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "crystallizeDevLog",
+        "description": "Crystallize and auto-format a structured development log note into Obsidian with tags and vector indexing.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string", "description": "Concise summary of work done or architectural decision made."},
+                "details": {"type": "string", "description": "Full technical breakdown, code snippets, or notes."},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags for categorization (e.g. ['voice', 'bugfix'])."}
+            },
+            "required": ["summary"]
+        }
+    },
+    {
+        "name": "interceptTerminalError",
+        "description": "Analyze terminal command error tracebacks to diagnose root causes (missing Python/Node modules, port conflicts) and produce auto-healing commands.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "The command that failed."},
+                "stderr": {"type": "string", "description": "Standard error / traceback stream."},
+                "stdout": {"type": "string", "description": "Standard output stream."},
+                "exit_code": {"type": "integer", "description": "Exit code of the process."}
+            },
+            "required": ["command", "stderr"]
+        }
+    },
+    {
+        "name": "scheduleRecurringWhatsAppCall",
+        "description": "Schedule a recurring WhatsApp voice or video call (e.g., daily or weekly) with a contact.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "recipient": {"type": "string", "description": "The contact name or phone number."},
+                "time_str": {"type": "string", "description": "Scheduled time (e.g. '5:00 PM', 'tomorrow at 10 AM')."},
+                "call_type": {"type": "string", "description": "'voice' (default) or 'video'."},
+                "recurring": {"type": "string", "description": "'daily' or 'weekly'."},
+                "note": {"type": "string", "description": "Optional reminder note for the call."}
+            },
+            "required": ["recipient", "time_str", "recurring"]
+        }
+    },
+    {
+        "name": "transcribeWhatsAppAudio",
+        "description": "Transcribe an incoming WhatsApp voice message or audio recording into text.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "audio_path": {"type": "string", "description": "Path to the recorded voice note / audio file."}
+            },
+            "required": ["audio_path"]
+        }
+    },
+    {
+        "name": "sendRemoteAlert",
+        "description": "Dispatch an urgent out-of-home push alert to Telegram or webhook.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Title of the alert."},
+                "message": {"type": "string", "description": "Detailed alert body."},
+                "level": {"type": "string", "description": "Severity level: info, warning, or critical."}
+            },
+            "required": ["title", "message"]
+        }
+    },
 ]
 
 
@@ -1148,6 +1226,82 @@ def _handle_cancel_scheduled_call(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"Failed to cancel scheduled call: {e}"}
 
 
+def _handle_search_second_brain_semantic(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.vector_memory import search_vault_semantic
+        query = str(args.get("query") or "").strip()
+        top_k = int(args.get("top_k") or 5)
+        if not query:
+            return {"ok": False, "error": "'query' is required."}
+        return search_vault_semantic(query, top_k=top_k)
+    except Exception as e:
+        return {"ok": False, "error": f"Semantic search failed: {e}"}
+
+
+def _handle_crystallize_dev_log(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.vector_memory import crystallize_dev_log
+        summary = str(args.get("summary") or "").strip()
+        details = str(args.get("details") or "").strip()
+        tags = args.get("tags")
+        if not summary:
+            return {"ok": False, "error": "'summary' is required."}
+        return crystallize_dev_log(summary, details=details, tags=tags)
+    except Exception as e:
+        return {"ok": False, "error": f"Dev log crystallization failed: {e}"}
+
+
+def _handle_intercept_terminal_error(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.terminal_sentinel import intercept_terminal_error
+        command = str(args.get("command") or "").strip()
+        stderr = str(args.get("stderr") or "").strip()
+        stdout = str(args.get("stdout") or "").strip()
+        exit_code = int(args.get("exit_code") or 1)
+        return intercept_terminal_error(command, stderr, stdout, exit_code)
+    except Exception as e:
+        return {"ok": False, "error": f"Terminal error interception failed: {e}"}
+
+
+def _handle_schedule_recurring_whatsapp_call(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import schedule_whatsapp_call
+        recipient = str(args.get("recipient") or args.get("contact") or "").strip()
+        time_str = str(args.get("time_str") or args.get("time") or "").strip()
+        call_type = str(args.get("call_type") or "voice").strip()
+        recurring = str(args.get("recurring") or "daily").strip()
+        note = str(args.get("note") or "").strip()
+        if not recipient or not time_str:
+            return {"ok": False, "error": "'recipient' and 'time_str' are required to schedule a call."}
+        return schedule_whatsapp_call(recipient, time_str, call_type, note, recurring=recurring)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to schedule recurring WhatsApp call: {e}"}
+
+
+def _handle_transcribe_whatsapp_audio(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from whatsapp_manager import transcribe_whatsapp_audio
+        audio_path = str(args.get("audio_path") or "").strip()
+        if not audio_path:
+            return {"ok": False, "error": "'audio_path' is required."}
+        return transcribe_whatsapp_audio(audio_path)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to transcribe audio: {e}"}
+
+
+def _handle_send_remote_alert(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from remote_bridge import send_remote_alert
+        title = str(args.get("title") or "Prime Alert").strip()
+        message = str(args.get("message") or "").strip()
+        level = str(args.get("level") or "info").strip()
+        if not message:
+            return {"ok": False, "error": "'message' is required."}
+        return send_remote_alert(title, message, level=level)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to send remote alert: {e}"}
+
+
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
     "getTime": _handle_time,
@@ -1193,8 +1347,14 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "hangupWhatsAppCall": _handle_end_whatsapp_call,
     "toggleWhatsAppCallMute": _handle_toggle_whatsapp_call_mute,
     "scheduleWhatsAppCall": _handle_schedule_whatsapp_call,
+    "scheduleRecurringWhatsAppCall": _handle_schedule_recurring_whatsapp_call,
     "listScheduledWhatsAppCalls": _handle_list_scheduled_calls,
     "cancelScheduledWhatsAppCall": _handle_cancel_scheduled_call,
+    "transcribeWhatsAppAudio": _handle_transcribe_whatsapp_audio,
+    "searchSecondBrainSemantic": _handle_search_second_brain_semantic,
+    "crystallizeDevLog": _handle_crystallize_dev_log,
+    "interceptTerminalError": _handle_intercept_terminal_error,
+    "sendRemoteAlert": _handle_send_remote_alert,
 }
 
 

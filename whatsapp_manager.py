@@ -999,8 +999,14 @@ def save_scheduled_calls(calls: List[Dict[str, Any]]) -> None:
         log.error("Failed to save scheduled calls: %s", e)
 
 
-def schedule_whatsapp_call(recipient: str, time_str: str, call_type: str = "voice", note: str = "") -> Dict[str, Any]:
-    """Schedule a WhatsApp voice or video call for later."""
+def schedule_whatsapp_call(
+    recipient: str,
+    time_str: str,
+    call_type: str = "voice",
+    note: str = "",
+    recurring: str = ""
+) -> Dict[str, Any]:
+    """Schedule a WhatsApp voice or video call for later, with optional recurring schedule (daily/weekly)."""
     target_dt = parse_schedule_time(time_str)
     if not target_dt:
         return {
@@ -1012,6 +1018,15 @@ def schedule_whatsapp_call(recipient: str, time_str: str, call_type: str = "voic
     call_id = f"call_{int(time.time())}_{secrets.token_hex(3)}"
     call_type_clean = "video" if "vid" in str(call_type).lower() else "voice"
 
+    # Detect recurring keywords from time_str if not explicitly passed
+    rec_type = (recurring or "").strip().lower()
+    if not rec_type:
+        lower_t = time_str.lower()
+        if any(k in lower_t for k in ["daily", "har roz", "rozana", "every day", "har din"]):
+            rec_type = "daily"
+        elif any(k in lower_t for k in ["weekly", "har hafte", "every week"]):
+            rec_type = "weekly"
+
     call_entry = {
         "id": call_id,
         "recipient": display_name,
@@ -1021,6 +1036,7 @@ def schedule_whatsapp_call(recipient: str, time_str: str, call_type: str = "voic
         "target_iso": target_dt.isoformat(),
         "target_epoch": target_dt.timestamp(),
         "note": note,
+        "recurring": rec_type,
         "status": "pending",
         "created_at": time.time()
     }
@@ -1033,12 +1049,14 @@ def schedule_whatsapp_call(recipient: str, time_str: str, call_type: str = "voic
     start_call_scheduler_daemon()
 
     readable_time = target_dt.strftime("%I:%M %p, %d %b")
+    rec_msg = f" (recurring: {rec_type})" if rec_type else ""
     return {
         "ok": True,
-        "message": f"Scheduled WhatsApp {call_type_clean} call to '{display_name}' for {readable_time}.",
+        "message": f"Scheduled WhatsApp {call_type_clean} call to '{display_name}' for {readable_time}{rec_msg}.",
         "call_id": call_id,
         "recipient": display_name,
-        "scheduled_time": readable_time
+        "scheduled_time": readable_time,
+        "recurring": rec_type
     }
 
 
@@ -1088,11 +1106,26 @@ def _scheduler_loop():
                     try:
                         try:
                             from actions.spoken_voice import speak_voice_threaded
-                            speak_voice_threaded(f"Sir, aapka WhatsApp {c['call_type']} call schedule tha {c['recipient']} ke sath. Call connect kar raha hu.")
+                            rec_txt = " (recurring)" if c.get("recurring") else ""
+                            speak_voice_threaded(f"Sir, aapka WhatsApp {c['call_type']} call{rec_txt} schedule tha {c['recipient']} ke sath. Call connect kar raha hu.")
                         except Exception:
                             pass
                         make_whatsapp_call(c["recipient"], c["call_type"])
-                        c["status"] = "completed"
+                        
+                        # Handle recurring advancement
+                        rec = c.get("recurring", "")
+                        if rec == "daily":
+                            next_dt = datetime.fromtimestamp(c["target_epoch"]) + timedelta(days=1)
+                            c["target_epoch"] = next_dt.timestamp()
+                            c["target_iso"] = next_dt.isoformat()
+                            c["status"] = "pending"
+                        elif rec == "weekly":
+                            next_dt = datetime.fromtimestamp(c["target_epoch"]) + timedelta(weeks=1)
+                            c["target_epoch"] = next_dt.timestamp()
+                            c["target_iso"] = next_dt.isoformat()
+                            c["status"] = "pending"
+                        else:
+                            c["status"] = "completed"
                     except Exception as e:
                         c["status"] = f"failed: {e}"
                     modified = True
@@ -1111,5 +1144,23 @@ def start_call_scheduler_daemon():
     _SCHEDULER_THREAD_RUNNING = True
     t = threading.Thread(target=_scheduler_loop, daemon=True, name="WhatsAppCallSchedulerThread")
     t.start()
+
+
+def transcribe_whatsapp_audio(audio_path: str) -> Dict[str, Any]:
+    """Transcribe an incoming WhatsApp audio file or voice note using speech models."""
+    p = Path(audio_path)
+    if not p.exists():
+        return {"ok": False, "error": f"Audio file not found: {audio_path}"}
+
+    try:
+        import speech_recognition as sr
+        r = sr.Recognizer()
+        with sr.AudioFile(str(p)) as source:
+            audio_data = r.record(source)
+            text = r.recognize_google(audio_data)
+            return {"ok": True, "transcription": text, "file": str(p)}
+    except Exception as e:
+        log.warning("Audio transcription fallback error: %s", e)
+        return {"ok": False, "error": f"Could not transcribe audio: {e}"}
 
 

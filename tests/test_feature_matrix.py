@@ -36,7 +36,7 @@ import tool_definitions
 from tool_definitions import execute_tool
 from desktop_agent.registry import TOOLS, load_all
 import whatsapp_manager
-from voice_engine import voice, is_hindi_or_hinglish
+from voice_engine import voice, is_hindi_or_hinglish, check_barge_in_phrase, BARGE_IN_KEYWORDS
 from core.safe_exec import validate_ast, UnsafeCodeError
 from core.intent_router import is_coding_task
 import obsidian_rag
@@ -46,6 +46,9 @@ from neural_mesh_bridge import mesh_bridge
 from predictive_context_engine import predictive_engine
 from prime_traces import trace_logger
 from ai_agent import agent
+import core.vector_memory as vector_memory
+import core.terminal_sentinel as terminal_sentinel
+import remote_bridge
 
 
 class TestPrimeFeatureMatrix(unittest.TestCase):
@@ -440,6 +443,144 @@ class TestPrimeFeatureMatrix(unittest.TestCase):
         self.assertTrue(hasattr(agent, "process_message"))
         self.assertEqual(agent.process_input.__name__, agent.process_message.__name__)
 
+    # =========================================================================
+    # 16. Full-Duplex Barge-In Sentinel & Speech Interruption
+    # =========================================================================
+    def test_36_barge_in_detection_and_interruption(self):
+        """Feature 36: Speech interruption keyword detection and barge_in API."""
+        self.assertTrue(check_barge_in_phrase("stop please"))
+        self.assertTrue(check_barge_in_phrase("ruko ek second"))
+        self.assertTrue(check_barge_in_phrase("wait"))
+        self.assertTrue(check_barge_in_phrase("chup ho jao"))
+        self.assertFalse(check_barge_in_phrase("open chrome and play song"))
+
+        # Test barge_in method returns boolean and terminates speech cleanly
+        interrupted = voice.barge_in()
+        self.assertIsInstance(interrupted, bool)
+
+    # =========================================================================
+    # 17. Recurring WhatsApp Call Scheduler & Voice Note Transcriber
+    # =========================================================================
+    def test_37_recurring_whatsapp_call_scheduling(self):
+        """Feature 37: Recurring daily/weekly WhatsApp call scheduling."""
+        res = whatsapp_manager.schedule_whatsapp_call(
+            recipient="Papa",
+            time_str="5:00 PM",
+            call_type="voice",
+            recurring="daily"
+        )
+        self.assertTrue(res.get("ok"))
+        self.assertEqual(res.get("recurring"), "daily")
+        self.assertIn("recurring: daily", res.get("message", ""))
+
+        # Cancel test schedule to keep clean state
+        call_id = res.get("call_id")
+        if call_id:
+            cancel_res = whatsapp_manager.cancel_scheduled_call(call_id)
+            self.assertTrue(cancel_res.get("ok"))
+
+    def test_38_whatsapp_audio_transcription_fallback(self):
+        """Feature 38: WhatsApp voice note audio transcriber fallback gracefully on missing file."""
+        res = whatsapp_manager.transcribe_whatsapp_audio("non_existent_audio_sample.ogg")
+        self.assertFalse(res.get("ok"))
+        self.assertIn("Audio file not found", res.get("error", ""))
+
+    # =========================================================================
+    # 18. Semantic Vector Memory & Dev Log Crystallizer
+    # =========================================================================
+    def test_39_vector_memory_and_dev_log_crystallizer(self):
+        """Feature 39: TF-IDF & Cosine Similarity search and Obsidian dev log crystallizer."""
+        index = vector_memory.VectorMemoryIndex()
+        index.add_document("doc1", "Python async event loop audio voice streaming architecture")
+        index.add_document("doc2", "WhatsApp automation pyautogui chrome web calling and chats")
+
+        results = index.search("voice audio stream", top_k=2)
+        self.assertTrue(len(results) > 0)
+        self.assertEqual(results[0]["id"], "doc1")
+
+        # Test Dev Log Crystallizer
+        res = vector_memory.crystallize_dev_log(
+            summary="Unit Test Dev Log",
+            details="Verifying automated dev log crystallization into Obsidian.",
+            tags=["test", "crystallize"]
+        )
+        self.assertTrue(res.get("ok"))
+        self.assertTrue(Path(res["path"]).exists())
+        # Clean up test note
+        try:
+            os.remove(res["path"])
+        except Exception:
+            pass
+
+    # =========================================================================
+    # 19. Proactive Terminal Error Sentinel & Auto-Fix Interceptor
+    # =========================================================================
+    def test_40_terminal_sentinel_diagnosis_and_auto_heal(self):
+        """Feature 40: Error traceback parsing and auto-fix resolution."""
+        sentinel = terminal_sentinel.get_terminal_sentinel()
+        
+        # Test missing python module with mapping (e.g. cv2 -> opencv-python)
+        py_err = "Traceback (most recent call last):\nModuleNotFoundError: No module named 'cv2'"
+        diag = sentinel.intercept_error("python script.py", py_err)
+        self.assertTrue(diag.get("detected"))
+        self.assertEqual(diag.get("error_type"), "missing_python_module")
+        self.assertEqual(diag.get("auto_heal_command"), "pip install opencv-python")
+
+        # Test port in use
+        port_err = "Error: listen EADDRINUSE: address already in use :::8080"
+        diag_port = sentinel.intercept_error("npm start", port_err)
+        self.assertTrue(diag_port.get("detected"))
+        self.assertEqual(diag_port.get("error_type"), "port_in_use")
+        self.assertIn("8080", diag_port.get("auto_heal_command", ""))
+
+    # =========================================================================
+    # 20. Remote Bridge & Out-of-Home Link
+    # =========================================================================
+    def test_41_remote_bridge_alerts_and_commands(self):
+        """Feature 41: Remote alert buffering and authenticated command execution."""
+        bridge = remote_bridge.get_remote_bridge()
+
+        # Alert dispatch
+        alert_res = bridge.send_remote_alert("Test Notification", "Testing out-of-home bridge", level="info")
+        self.assertTrue(alert_res.get("ok"))
+        self.assertEqual(alert_res["alert"]["title"], "Test Notification")
+
+        # Remote command /status
+        status_res = bridge.execute_remote_command("/status")
+        self.assertTrue(status_res.get("ok"))
+        self.assertIn("PRIME STATUS REPORT", status_res.get("output", ""))
+
+        # Remote command /help
+        help_res = bridge.execute_remote_command("/help")
+        self.assertTrue(help_res.get("ok"))
+        self.assertIn("/status", help_res.get("output", ""))
+
+    # =========================================================================
+    # 21. Tool Registry Dispatch for New Capabilities
+    # =========================================================================
+    def test_42_new_tools_dispatch_integration(self):
+        """Feature 42: Verification of execute_tool dispatch for all 5 new modules."""
+        # 1. searchSecondBrainSemantic
+        res_sem = execute_tool("searchSecondBrainSemantic", {"query": "voice"})
+        self.assertTrue(res_sem.get("ok"))
+
+        # 2. interceptTerminalError
+        res_sent = execute_tool("interceptTerminalError", {
+            "command": "python test.py",
+            "stderr": "ModuleNotFoundError: No module named 'yaml'"
+        })
+        self.assertTrue(res_sent.get("ok"))
+        self.assertEqual(res_sent.get("diagnosis", {}).get("target"), "pyyaml")
+
+        # 3. sendRemoteAlert
+        res_alert = execute_tool("sendRemoteAlert", {"title": "Test", "message": "Test Message"})
+        self.assertTrue(res_alert.get("ok"))
+
+        # 4. transcribeWhatsAppAudio
+        res_audio = execute_tool("transcribeWhatsAppAudio", {"audio_path": "non_existent.ogg"})
+        self.assertFalse(res_audio.get("ok"))
+
 
 if __name__ == "__main__":
     unittest.main()
+

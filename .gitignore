@@ -49,6 +49,9 @@ data/whatsapp_session/
 data/contacts.json
 data/obsidian_organizer_cache.json
 data/plugin_cache.json
+data/remote_alerts.jsonl
+data/vector_memory_cache.json
+data/scheduled_calls.json
 logs/
 exports/*.zip
 

@@ -4,7 +4,7 @@
 
 [![Windows OS](https://img.shields.io/badge/OS-Windows_11_%2F_10-0078D6?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Tests Passing](https://img.shields.io/badge/Tests-111%2F111_Passing-brightgreen?style=for-the-badge&logo=pytest)](https://github.com/thoratpratik2323-hue/prime-II1)
+[![Tests Passing](https://img.shields.io/badge/Tests-118%2F118_Passing-brightgreen?style=for-the-badge&logo=pytest)](https://github.com/thoratpratik2323-hue/prime-II1)
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini-Flash--Lite_Latest-4285F4?style=for-the-badge&logo=google)](https://aistudio.google.com)
 [![Groq LPU](https://img.shields.io/badge/Groq-500+_Tokens/sec-F55036?style=for-the-badge&logo=fastapi)](https://groq.com)
 [![Voice Model](https://img.shields.io/badge/Voice-Brian_Multilingual_+22%25-blueviolet?style=for-the-badge)](https://github.com/thoratpratik2323-hue/prime-II1)
@@ -69,17 +69,20 @@ Integrated with the complete Agency Agent Roster (`agency_roster.py`), allowing 
 - **Design & UI/UX (16):** UI Designer, UX Architect, Whimsy Injector, Brand Guardian.
 - **Testing & QA (6):** Test Automation Engineer, Evidence Collector, API Tester, Reality Checker.
 
-### 5. 🧪 Comprehensive Test Suite (111 Passing Tests)
+### 5. 🧪 Comprehensive Test Suite (118 Passing Tests)
 Includes [`tests/test_prime_full_system.py`](tests/test_prime_full_system.py) and [`tests/test_feature_matrix.py`](tests/test_feature_matrix.py) which verify:
 - Core configuration, single-instance mutex, and provider fallback ladders.
 - Spoken voice bilingual routing, Edge-TTS rate calculation (+22%), and text sanitization.
-- WhatsApp phone normalization, interactive thread dispatch, calling tools, and call scheduler.
-- All 81 native tool specifications, file lifecycle, system specs, and active O(1) handlers.
+- Full-Duplex Barge-In Sentinel: Real-time speech interruption keyword interception (`voice.barge_in()`).
+- WhatsApp phone normalization, interactive thread dispatch, calling tools, recurring call scheduler, and voice note transcription.
+- All 87 native tool specifications, file lifecycle, system specs, and active O(1) handlers.
 - Safe AST code evaluation sandbox, blocked imports, and single-use confirmation tokens.
-- Obsidian RAG Second Brain read/write/search capabilities.
+- Semantic Vector Memory (TF-IDF & Cosine Similarity) and Obsidian Dev Log Crystallizer.
+- Proactive Terminal Error Sentinel with automated root-cause diagnosis and self-healing commands.
+- Remote Neural Mesh Link & Telegram/Webhook bridge with authenticated command execution (`/status`, `/lock`, `/call`, `/note`, `/schedule`).
 - 279 agency skills and intent router classification (<1ms fast-path).
 - Neural Mesh pairing tokens, predictive context stack detection, and telemetry traces.
-- Self-healing diagnostic audit (status: `HEALTHY`, 6/6 sub-tests passed in 11.9ms).
+- Self-healing diagnostic audit (status: `HEALTHY`, 6/6 sub-tests passed in 4.1ms).
 
 ---
 
@@ -139,7 +142,7 @@ Prime interacts with Windows exactly like a human engineer:
 
 ---
 
-## 🛠️ Complete 73-Tool Arsenal
+## 🛠️ Complete 87-Tool Arsenal
 
 | Category | Tools & Capabilities |
 | :--- | :--- |
@@ -149,10 +152,10 @@ Prime interacts with Windows exactly like a human engineer:
 | **Files & Workspace** | `createFile`, `readFile`, `listFiles`, `searchFiles`, `openFolder`, `deleteFile`, `createPythonFile`, `runPythonScript`, `exportWorkspaceZip` |
 | **Web & Search** | `openWebsite`, `searchWeb`, `searchGoogle`, `searchYouTube`, `searchGitHub`, `getWeather` |
 | **Vision & Screen** | `takeScreenshot`, `saveScreenshot`, `readScreen`, `analyzeScreenWithAI`, `ambientVisionInspect` |
-| **Developer Automation (Claw Code)** | `runTerminalCommand`, `patchCodeFile`, `gitAutomate`, `runUnitTests`, `debugCodeFile`, `executePowerShell`, `exportProjectStarter` |
-| **Obsidian Second Brain** | `searchObsidianNotes`, `readObsidianNote`, `writeObsidianNote`, `quickNote`, `morningBriefing` |
-| **Media & IoT** | `mediaControl`, `spotifyControl`, `neuralMeshPair`, `selfHealingAudit` |
-| **WhatsApp Automation** | `sendWhatsAppMessage`, `saveWhatsAppContact`, `listWhatsAppContacts`, `setupWhatsAppWeb`, `readWhatsAppChats`, `importWhatsAppContacts` |
+| **Developer Automation & Healing** | `runTerminalCommand`, `patchCodeFile`, `gitAutomate`, `runUnitTests`, `debugCodeFile`, `executePowerShell`, `exportProjectStarter`, `interceptTerminalError` |
+| **Obsidian Second Brain & Vector Memory** | `searchObsidianNotes`, `searchSecondBrainSemantic`, `crystallizeDevLog`, `readObsidianNote`, `writeObsidianNote`, `quickNote`, `morningBriefing` |
+| **Media, IoT & Out-of-Home Mesh** | `mediaControl`, `spotifyControl`, `neuralMeshPair`, `selfHealingAudit`, `sendRemoteAlert` |
+| **WhatsApp Calling & Messaging** | `makeWhatsAppCall`, `acceptWhatsAppCall`, `rejectWhatsAppCall`, `endWhatsAppCall`, `toggleWhatsAppCallMute`, `scheduleWhatsAppCall`, `scheduleRecurringWhatsAppCall`, `listScheduledWhatsAppCalls`, `cancelScheduledWhatsAppCall`, `transcribeWhatsAppAudio`, `sendWhatsAppMessage`, `saveWhatsAppContact`, `listWhatsAppContacts`, `setupWhatsAppWeb`, `readWhatsAppChats`, `importWhatsAppContacts` |
 
 ---
 
