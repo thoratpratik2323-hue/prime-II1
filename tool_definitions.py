@@ -1004,6 +1004,20 @@ TOOL_SPECS: List[Dict[str, Any]] = [
             "required": ["profile"]
         }
     },
+    {
+        "name": "extractVideoFrames",
+        "description": "Extract image frames from any local video file (MP4, MKV, AVI) at regular time intervals.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "video_path": {"type": "string", "description": "Path or search query for the video file."},
+                "output_dir": {"type": "string", "description": "Optional destination directory for extracted images."},
+                "interval_seconds": {"type": "number", "description": "Seconds between extracted frames (default: 2.0)."},
+                "max_frames": {"type": "integer", "description": "Maximum number of frames to extract (default: 20)."}
+            },
+            "required": ["video_path"]
+        }
+    },
 ]
 
 
@@ -1520,6 +1534,20 @@ def _handle_set_power_profile(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"Failed to set power profile: {e}"}
 
 
+def _handle_extract_video_frames(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.video_processor import extract_video_frames
+        video_path = str(args.get("video_path") or "").strip()
+        output_dir = args.get("output_dir")
+        interval = float(args.get("interval_seconds") or 2.0)
+        max_f = int(args.get("max_frames") or 20)
+        if not video_path:
+            return {"ok": False, "error": "'video_path' is required."}
+        return extract_video_frames(video_path, output_dir=output_dir, interval_seconds=interval, max_frames=max_f)
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to extract video frames: {e}"}
+
+
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
     "getTime": _handle_time,
@@ -1586,6 +1614,7 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "generateEveningDebrief": _handle_generate_evening_debrief,
     "getHardwareHealthAudit": _handle_get_hardware_health_audit,
     "setPowerProfile": _handle_set_power_profile,
+    "extractVideoFrames": _handle_extract_video_frames,
 }
 
 

@@ -728,8 +728,63 @@ class TestPrimeFeatureMatrix(unittest.TestCase):
         prof = execute_tool("setPowerProfile", {"profile": "performance"})
         self.assertTrue(prof.get("ok"))
 
+        # 7. Video Frame Extractor (OpenCV)
+        v_res = execute_tool("extractVideoFrames", {"video_path": "non_existent_mock_video.mp4"})
+        # Should gracefully return error or ok=False without crashing
+        self.assertFalse(v_res.get("ok"))
+        self.assertIn("Could not locate", v_res.get("error", ""))
+
+    def test_49_video_frame_extractor_module(self):
+        """Feature 49: OpenCV Video Frame Extractor & Metadata Inspector."""
+        from core import video_processor
+        import tempfile
+        import numpy as np
+
+        # Test video search fallback on non-existent
+        not_found = video_processor.find_video_file("definitely_not_a_real_video_xyz123.mp4")
+        self.assertIsNone(not_found)
+
+        # Create a tiny 1-second synthetic MP4 video in temp dir to test OpenCV reading and extraction
+        try:
+            import cv2
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+                tmp_video_path = tmp.name
+
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(tmp_video_path, fourcc, 10.0, (64, 64))
+            for _ in range(10):
+                frame = np.zeros((64, 64, 3), dtype=np.uint8)
+                out.write(frame)
+            out.release()
+
+            # Test get_video_info
+            info = video_processor.get_video_info(tmp_video_path)
+            self.assertTrue(info.get("ok"))
+            self.assertEqual(info.get("resolution"), "64x64")
+            self.assertEqual(info.get("total_frames"), 10)
+
+            # Test extract_video_frames
+            with tempfile.TemporaryDirectory() as out_dir:
+                res = video_processor.extract_video_frames(
+                    video_path=tmp_video_path,
+                    output_dir=out_dir,
+                    interval_seconds=0.2,
+                    max_frames=5
+                )
+                self.assertTrue(res.get("ok"))
+                self.assertGreaterEqual(res.get("frames_extracted", 0), 1)
+                self.assertTrue(os.path.exists(res["extracted_images"][0]))
+
+            # Clean up temp video
+            if os.path.exists(tmp_video_path):
+                os.remove(tmp_video_path)
+
+        except ImportError:
+            pass  # Skip synthetic test if cv2/numpy unavailable in minimal environment
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
