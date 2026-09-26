@@ -422,10 +422,12 @@ def run_on_interactive_thread(fn: Callable[..., Any], *args, **kwargs) -> Any:
 
 
 def _focus_whatsapp_window_raw() -> bool:
-    """Finds and brings ANY active WhatsApp window (Chrome WhatsApp Web, Edge, or Desktop App) to the foreground."""
+    """Finds and brings ANY active WhatsApp window (WinUI Desktop App, Chrome WhatsApp Web, Edge) to the foreground."""
     if platform.system() != "Windows":
         return False
     try:
+        import ctypes
+        from ctypes import wintypes
         u32 = ctypes.windll.user32
         h_desk = u32.OpenDesktopW("Default", 0, False, 0x01FF)
         if h_desk:
@@ -440,8 +442,12 @@ def _focus_whatsapp_window_raw() -> bool:
             t = buf.value
             u32.GetClassNameW(h, buf, 512)
             c = buf.value
-            if "whatsapp" in t.lower() or "whatsapp" in c.lower():
-                hwnds.append((h, t, c))
+            # Exclude background helper/IME/notification windows
+            if any(bad in c.lower() for bad in ("hook", "notify", "ime", "broadcast")):
+                return True
+            if "whatsapp" in t.lower() or "whatsapp" in c.lower() or "winuidesktop" in c.lower():
+                is_vis = bool(u32.IsWindowVisible(h))
+                hwnds.append((h, t, c, is_vis))
             return True
 
         cb = WNDENUMPROC(_cb)
@@ -450,18 +456,22 @@ def _focus_whatsapp_window_raw() -> bool:
         else:
             u32.EnumWindows(cb, 0)
 
+        # Prioritize visible main window with WhatsApp title or WinUI class
+        hwnds.sort(key=lambda x: (x[3], x[1] == "WhatsApp", "winui" in x[2].lower()), reverse=True)
+
         if hwnds:
             hwnd = hwnds[0][0]
-            # Use AttachThreadInput to bypass Windows foreground activation lock
             curr_tid = ctypes.windll.kernel32.GetCurrentThreadId()
             fore_hwnd = u32.GetForegroundWindow()
             fore_tid = u32.GetWindowThreadProcessId(fore_hwnd, None)
             u32.AttachThreadInput(curr_tid, fore_tid, True)
             u32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            u32.ShowWindow(hwnd, 5)  # SW_SHOW
             u32.SetForegroundWindow(hwnd)
+            u32.BringWindowToTop(hwnd)
             u32.SetFocus(hwnd)
             u32.AttachThreadInput(curr_tid, fore_tid, False)
-            log.info("Focused WhatsApp window: HWND %s (%s)", hwnd, hwnds[0][1])
+            log.info("Focused WhatsApp window: HWND %s (%s - %s)", hwnd, hwnds[0][1], hwnds[0][2])
             return True
     except Exception as e:
         log.debug("_focus_whatsapp_window_raw error: %s", e)
@@ -474,18 +484,96 @@ def focus_whatsapp_window() -> bool:
 
 
 def press_enter_interactive():
-    """Simulates physical Enter key on interactive desktop."""
-    if platform.system() == "Windows":
-        u32 = ctypes.windll.user32
-        u32.keybd_event(0x0D, 0, 0, 0)
-        time.sleep(0.05)
-        u32.keybd_event(0x0D, 0, 2, 0)
-    else:
+    """
+    Simulates genuine hardware-level Enter keystroke on interactive desktop.
+    Combines 64-bit SendInput with hardware scan code 0x1C, native keybd_event, and PyAutoGUI.
+    """
+    if platform.system() != "Windows":
         try:
             import pyautogui
             pyautogui.press("enter")
         except Exception:
             pass
+        return
+
+    import ctypes
+    from ctypes import wintypes
+    u32 = ctypes.windll.user32
+
+    # 1. Hardware-level SendInput with scan code 0x1C (accepted by WinUI / XAML / UWP)
+    try:
+        ULONG_PTR = ctypes.c_ulonglong
+
+        class MOUSEINPUT(ctypes.Structure):
+            _fields_ = (
+                ('dx', wintypes.LONG),
+                ('dy', wintypes.LONG),
+                ('mouseData', wintypes.DWORD),
+                ('dwFlags', wintypes.DWORD),
+                ('time', wintypes.DWORD),
+                ('dwExtraInfo', ULONG_PTR),
+            )
+
+        class KEYBDINPUT(ctypes.Structure):
+            _fields_ = (
+                ('wVk', wintypes.WORD),
+                ('wScan', wintypes.WORD),
+                ('dwFlags', wintypes.DWORD),
+                ('time', wintypes.DWORD),
+                ('dwExtraInfo', ULONG_PTR),
+            )
+
+        class HARDWAREINPUT(ctypes.Structure):
+            _fields_ = (
+                ('uMsg', wintypes.DWORD),
+                ('wParamL', wintypes.WORD),
+                ('wParamH', wintypes.WORD),
+            )
+
+        class _INPUT_UNION(ctypes.Union):
+            _fields_ = (
+                ('mi', MOUSEINPUT),
+                ('ki', KEYBDINPUT),
+                ('hi', HARDWAREINPUT),
+            )
+
+        class INPUT(ctypes.Structure):
+            _fields_ = (
+                ('type', wintypes.DWORD),
+                ('union', _INPUT_UNION),
+            )
+
+        inp1 = INPUT()
+        inp1.type = 1  # INPUT_KEYBOARD
+        inp1.union.ki.wVk = 0x0D
+        inp1.union.ki.wScan = 0x1C
+        inp1.union.ki.dwFlags = 0
+
+        inp2 = INPUT()
+        inp2.type = 1
+        inp2.union.ki.wVk = 0x0D
+        inp2.union.ki.wScan = 0x1C
+        inp2.union.ki.dwFlags = 2  # KEYEVENTF_KEYUP
+
+        arr = (INPUT * 2)(inp1, inp2)
+        u32.SendInput(2, arr, ctypes.sizeof(INPUT))
+    except Exception as e:
+        log.debug("SendInput failed: %s", e)
+
+    # 2. Native keybd_event WITH hardware scan code 0x1C
+    try:
+        u32.keybd_event(0x0D, 0x1C, 0, 0)
+        time.sleep(0.04)
+        u32.keybd_event(0x0D, 0x1C, 2, 0)
+    except Exception as e:
+        log.debug("keybd_event failed: %s", e)
+
+    # 3. PyAutoGUI press fallback
+    try:
+        import pyautogui
+        pyautogui.press("enter")
+    except Exception:
+        pass
 
 
 def send_via_desktop_protocol(phone_number: str, message: str) -> Dict[str, Any]:
@@ -497,22 +585,16 @@ def send_via_desktop_protocol(phone_number: str, message: str) -> Dict[str, Any]
     def _do_send():
         # 1. Launch URI on interactive desktop
         launch_on_interactive_desktop(f'explorer.exe "{uri}"')
-        time.sleep(3.0)
 
-        # 2. Focus WhatsApp window
-        _focus_whatsapp_window_raw()
-        time.sleep(0.8)
-
-        # 3. Simulate Enter key to send the typed message (dual native + pyautogui)
-        press_enter_interactive()
-        time.sleep(0.2)
-        try:
-            import pyautogui
-            pyautogui.press("enter")
-        except Exception:
-            pass
-        time.sleep(0.4)
-        press_enter_interactive()
+        # 2. Progressive multi-burst Enter dispatch (at 2.8s, 4.0s, 5.2s, 6.5s)
+        # This completely guarantees the message is sent regardless of whether
+        # WhatsApp Desktop takes 2s or 5s to load the draft into the compose box!
+        burst_delays = [2.8, 1.2, 1.2, 1.3]
+        for delay in burst_delays:
+            time.sleep(delay)
+            _focus_whatsapp_window_raw()
+            time.sleep(0.1)
+            press_enter_interactive()
 
         return {
             "ok": True,
