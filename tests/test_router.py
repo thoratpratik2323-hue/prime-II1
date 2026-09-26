@@ -28,8 +28,16 @@ class TestIntentRouter(unittest.TestCase):
         # Reset mocks
         mock_openai.reset_mock()
         mock_genai.reset_mock()
+        if hasattr(mock_genai, "Client"):
+            mock_genai.Client.reset_mock()
         # Keep genai linked
         mock_genai.genai = mock_genai
+
+    def tearDown(self):
+        mock_openai.reset_mock()
+        mock_genai.reset_mock()
+        if hasattr(mock_genai, "Client"):
+            mock_genai.Client.reset_mock()
 
     def test_coding_keyword_fast_path(self):
         # Keywords should immediately return True without calling Gemini API

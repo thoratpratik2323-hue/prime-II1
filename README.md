@@ -4,7 +4,7 @@
 
 [![Windows OS](https://img.shields.io/badge/OS-Windows_11_%2F_10-0078D6?style=for-the-badge&logo=windows)](https://microsoft.com)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Tests Passing](https://img.shields.io/badge/Tests-76%2F76_Passing-brightgreen?style=for-the-badge&logo=pytest)](https://github.com/thoratpratik2323-hue/prime-II1)
+[![Tests Passing](https://img.shields.io/badge/Tests-111%2F111_Passing-brightgreen?style=for-the-badge&logo=pytest)](https://github.com/thoratpratik2323-hue/prime-II1)
 [![Google Gemini](https://img.shields.io/badge/Google_Gemini-Flash--Lite_Latest-4285F4?style=for-the-badge&logo=google)](https://aistudio.google.com)
 [![Groq LPU](https://img.shields.io/badge/Groq-500+_Tokens/sec-F55036?style=for-the-badge&logo=fastapi)](https://groq.com)
 [![Voice Model](https://img.shields.io/badge/Voice-Brian_Multilingual_+22%25-blueviolet?style=for-the-badge)](https://github.com/thoratpratik2323-hue/prime-II1)
@@ -69,15 +69,17 @@ Integrated with the complete Agency Agent Roster (`agency_roster.py`), allowing 
 - **Design & UI/UX (16):** UI Designer, UX Architect, Whimsy Injector, Brand Guardian.
 - **Testing & QA (6):** Test Automation Engineer, Evidence Collector, API Tester, Reality Checker.
 
-### 5. 🧪 Comprehensive Test Suite (76 Passing Tests)
-Includes [`tests/test_prime_full_system.py`](tests/test_prime_full_system.py) which verifies:
+### 5. 🧪 Comprehensive Test Suite (111 Passing Tests)
+Includes [`tests/test_prime_full_system.py`](tests/test_prime_full_system.py) and [`tests/test_feature_matrix.py`](tests/test_feature_matrix.py) which verify:
 - Core configuration, single-instance mutex, and provider fallback ladders.
-- Spoken voice bilingual routing and speech rates.
+- Spoken voice bilingual routing, Edge-TTS rate calculation (+22%), and text sanitization.
 - WhatsApp phone normalization, interactive thread dispatch, calling tools, and call scheduler.
-- All 81 tool specifications and executable handlers.
-- Obsidian RAG Second Brain read/write capabilities.
+- All 81 native tool specifications, file lifecycle, system specs, and active O(1) handlers.
+- Safe AST code evaluation sandbox, blocked imports, and single-use confirmation tokens.
+- Obsidian RAG Second Brain read/write/search capabilities.
 - 279 agency skills and intent router classification (<1ms fast-path).
-- Self-healing diagnostic audit (status: `HEALTHY`, 6/6 sub-tests passed in 9.82ms).
+- Neural Mesh pairing tokens, predictive context stack detection, and telemetry traces.
+- Self-healing diagnostic audit (status: `HEALTHY`, 6/6 sub-tests passed in 11.9ms).
 
 ---
 
