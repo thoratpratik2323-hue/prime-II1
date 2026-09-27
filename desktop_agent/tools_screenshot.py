@@ -290,11 +290,133 @@ def analyze_screen_with_ai(args: Dict[str, Any] | None = None) -> Dict[str, Any]
             return {"result": f"Screen captured but vision analysis encountered an error: {e}"}
 
 
+@register("locateAndClickUI")
+def locate_and_click_ui(args: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """
+    Visually ground a UI element on screen using Gemini Vision coordinates,
+    and perform mouse click or keyboard typing.
+    Args:
+        element (str): Description of the UI element (e.g. 'blue submit button', 'search input field', 'cancel button')
+        action (str, optional): 'click', 'double_click', 'right_click', 'hover', or 'type'. Default: 'click'.
+        text (str, optional): Text to type if action is 'type'.
+    """
+    args = args or {}
+    element_desc = args.get("element", "").strip()
+    if not element_desc:
+        element_desc = args.get("target", "").strip() or args.get("query", "").strip()
+    if not element_desc:
+        return {"ok": False, "error": "Missing 'element' description to locate on screen."}
+
+    action = str(args.get("action", "click")).lower().strip()
+    text_to_type = str(args.get("text", "")).strip()
+
+    try:
+        import pyautogui
+        pyautogui.FAILSAFE = False
+        screen_w, screen_h = pyautogui.size()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to get screen dimensions: {e}"}
+
+    try:
+        img = _capture()
+    except Exception as e:
+        return {"ok": False, "error": f"Failed to capture screen for vision grounding: {e}"}
+
+    # Prepare image
+    orig_w, orig_h = img.size
+    from io import BytesIO
+    buf = BytesIO()
+    # Scale down if very large for fast inference
+    scale = 1.0
+    if orig_w > 1920:
+        scale = 1920 / orig_w
+        proc_img = img.resize((int(orig_w * scale), int(orig_h * scale)))
+    else:
+        proc_img = img
+
+    proc_img.convert("RGB").save(buf, format="JPEG", quality=80)
+    img_bytes = buf.getvalue()
+
+    grounding_prompt = (
+        f"You are a computer vision UI grounding specialist.\n"
+        f"Find the UI element: '{element_desc}'.\n"
+        "Return the coordinate point of the center of this element as normalized coordinates between 0 and 1000.\n"
+        "Respond ONLY with a JSON object in this exact format:\n"
+        "{\"point\": [y, x], \"confidence\": 0.95, \"label\": \"brief description\"}\n"
+        "Where y is from 0 (top) to 1000 (bottom), and x is from 0 (left) to 1000 (right)."
+    )
+
+    try:
+        from config import config
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=config.gemini_api_key)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                grounding_prompt,
+                types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
+        )
+
+        import json
+        resp_text = response.text.strip()
+        data = json.loads(resp_text)
+        point = data.get("point")
+        if not point or len(point) != 2:
+            return {"ok": False, "error": f"Could not determine element coordinates. Response: {resp_text}"}
+
+        norm_y, norm_x = point[0], point[1]
+        actual_x = int((norm_x / 1000.0) * screen_w)
+        actual_y = int((norm_y / 1000.0) * screen_h)
+
+        # Move mouse smoothly
+        pyautogui.moveTo(actual_x, actual_y, duration=0.2)
+
+        # Execute target action
+        if action == "double_click":
+            pyautogui.doubleClick(actual_x, actual_y)
+            msg = f"Double clicked on '{element_desc}' at ({actual_x}, {actual_y})."
+        elif action == "right_click":
+            pyautogui.rightClick(actual_x, actual_y)
+            msg = f"Right clicked on '{element_desc}' at ({actual_x}, {actual_y})."
+        elif action == "hover":
+            msg = f"Hovered over '{element_desc}' at ({actual_x}, {actual_y})."
+        elif action == "type":
+            pyautogui.click(actual_x, actual_y)
+            time.sleep(0.1)
+            if text_to_type:
+                pyautogui.write(text_to_type, interval=0.02)
+            msg = f"Clicked on '{element_desc}' and typed '{text_to_type}'."
+        else:  # default 'click'
+            pyautogui.click(actual_x, actual_y)
+            msg = f"Clicked on '{element_desc}' at ({actual_x}, {actual_y})."
+
+        return {
+            "ok": True,
+            "message": msg,
+            "element": element_desc,
+            "action": action,
+            "screen_coords": {"x": actual_x, "y": actual_y},
+            "normalized_point": {"x": norm_x, "y": norm_y},
+            "confidence": data.get("confidence", 1.0)
+        }
+
+    except Exception as e:
+        return {"ok": False, "error": f"Visual grounding failed: {e}"}
+
+
 __all__ = [
     "take_screenshot",
     "save_screenshot",
     "analyze_screenshot",
     "read_screen",
     "analyze_screen_with_ai",
+    "locate_and_click_ui",
 ]
+
 

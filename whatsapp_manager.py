@@ -1518,3 +1518,182 @@ def transcribe_whatsapp_audio(audio_path: str) -> Dict[str, Any]:
         return {"ok": False, "error": f"Could not transcribe audio: {e}"}
 
 
+# ==============================================================================
+# AUTONOMOUS WHATSAPP BACKGROUND AGENT (WATCHER, UNREAD ALERTS, FOCUS MODE)
+# ==============================================================================
+
+_FOCUS_MODE = {
+    "enabled": False,
+    "reply_template": "Hello! Pratik is currently focused. He will get back to you shortly.",
+}
+_WATCHER_THREAD_RUNNING = False
+_WATCHER_STOP_EVENT = threading.Event()
+_LAST_NOTIFIED_UNREAD_COUNT = 0
+_PENDING_CONFIRMATIONS: Dict[str, Dict[str, Any]] = {}
+
+
+def set_whatsapp_focus_mode(enabled: bool, reply_message: Optional[str] = None) -> Dict[str, Any]:
+    """Enable or disable WhatsApp Focus / DND mode with automated reply template."""
+    global _FOCUS_MODE
+    _FOCUS_MODE["enabled"] = bool(enabled)
+    if reply_message:
+        _FOCUS_MODE["reply_template"] = reply_message.strip()
+
+    status = "ENABLED" if _FOCUS_MODE["enabled"] else "DISABLED"
+    msg = f"WhatsApp Focus Mode is now {status}. Reply: '{_FOCUS_MODE['reply_template']}'"
+    log.info(msg)
+    return {
+        "ok": True,
+        "enabled": _FOCUS_MODE["enabled"],
+        "message": msg,
+        "reply_template": _FOCUS_MODE["reply_template"]
+    }
+
+
+def get_whatsapp_focus_mode() -> Dict[str, Any]:
+    """Get current WhatsApp Focus Mode status."""
+    return {
+        "ok": True,
+        "enabled": _FOCUS_MODE["enabled"],
+        "reply_template": _FOCUS_MODE["reply_template"]
+    }
+
+
+def check_unread_whatsapp_messages() -> Dict[str, Any]:
+    """
+    Check for unread messages on WhatsApp Desktop.
+    Scans window titles and UI automation badges for unread counts.
+    """
+    unread_count = 0
+    title_found = ""
+
+    try:
+        import pygetwindow as gw
+        windows = gw.getWindowsWithTitle("WhatsApp")
+        for win in windows:
+            title = win.title.strip()
+            # Check for title format like "(3) WhatsApp" or "WhatsApp (2)"
+            m = re.search(r"\((\d+)\)", title)
+            if m:
+                unread_count = max(unread_count, int(m.group(1)))
+                title_found = title
+    except Exception as e:
+        log.debug("Title unread check error: %s", e)
+
+    # Check via UIA badges if title had no count
+    if unread_count == 0:
+        try:
+            hwnds = _find_whatsapp_hwnds()
+            if hwnds:
+                from pywinauto import Application
+                app = Application(backend="uia").connect(handle=hwnds[0])
+                win = app.window(handle=hwnds[0])
+                badges = win.descendants(control_type="Text")
+                for b in badges:
+                    txt = b.window_text().strip()
+                    if txt.isdigit() and int(txt) < 50:
+                        unread_count += int(txt)
+        except Exception:
+            pass
+
+    has_unread = unread_count > 0
+    return {
+        "ok": True,
+        "has_unread": has_unread,
+        "unread_count": unread_count,
+        "title": title_found,
+        "focus_mode": _FOCUS_MODE["enabled"]
+    }
+
+
+def _unread_watcher_loop():
+    """Background watcher for incoming WhatsApp unread notifications."""
+    global _LAST_NOTIFIED_UNREAD_COUNT
+    log.info("[WhatsApp Watcher] Background unread monitoring started.")
+
+    while not _WATCHER_STOP_EVENT.is_set():
+        try:
+            status = check_unread_whatsapp_messages()
+            curr_count = status.get("unread_count", 0)
+
+            if curr_count > 0 and curr_count != _LAST_NOTIFIED_UNREAD_COUNT:
+                _LAST_NOTIFIED_UNREAD_COUNT = curr_count
+                alert_text = f"Sir, you have {curr_count} unread WhatsApp message{'s' if curr_count > 1 else ''}."
+                log.info("[WhatsApp Watcher] %s", alert_text)
+
+                try:
+                    from actions.spoken_voice import speak_voice_threaded
+                    speak_voice_threaded(alert_text)
+                except Exception:
+                    pass
+            elif curr_count == 0:
+                _LAST_NOTIFIED_UNREAD_COUNT = 0
+
+        except Exception as e:
+            log.debug("WhatsApp watcher loop error: %s", e)
+
+        _WATCHER_STOP_EVENT.wait(20.0)
+
+
+def start_whatsapp_unread_watcher() -> Dict[str, Any]:
+    """Start the background WhatsApp unread message watcher."""
+    global _WATCHER_THREAD_RUNNING
+    if _WATCHER_THREAD_RUNNING:
+        return {"ok": True, "message": "WhatsApp background watcher is already active."}
+
+    _WATCHER_STOP_EVENT.clear()
+    _WATCHER_THREAD_RUNNING = True
+    t = threading.Thread(target=_unread_watcher_loop, daemon=True, name="WhatsAppUnreadWatcherThread")
+    t.start()
+    return {"ok": True, "message": "WhatsApp autonomous background watcher initiated."}
+
+
+def stop_whatsapp_unread_watcher() -> Dict[str, Any]:
+    """Stop the background WhatsApp unread message watcher."""
+    global _WATCHER_THREAD_RUNNING
+    _WATCHER_STOP_EVENT.set()
+    _WATCHER_THREAD_RUNNING = False
+    return {"ok": True, "message": "WhatsApp autonomous background watcher stopped."}
+
+
+def draft_whatsapp_with_confirmation(recipient: str, message: str) -> Dict[str, Any]:
+    """
+    Stage a draft WhatsApp message and request interactive voice confirmation before sending.
+    """
+    global _PENDING_CONFIRMATIONS
+    draft_id = f"draft_{int(time.time())}"
+    _PENDING_CONFIRMATIONS[draft_id] = {
+        "recipient": recipient,
+        "message": message,
+        "timestamp": time.time()
+    }
+    return {
+        "ok": True,
+        "draft_id": draft_id,
+        "recipient": recipient,
+        "message_body": message,
+        "prompt": f"I have drafted your message to {recipient}: '{message}'. Should I send it now, Sir?",
+        "awaiting_confirmation": True
+    }
+
+
+def confirm_and_send_draft(draft_id: Optional[str] = None) -> Dict[str, Any]:
+    """Confirm and dispatch a pending drafted WhatsApp message."""
+    global _PENDING_CONFIRMATIONS
+    if not _PENDING_CONFIRMATIONS:
+        return {"ok": False, "error": "No pending WhatsApp message drafts to send."}
+
+    target_id = draft_id or list(_PENDING_CONFIRMATIONS.keys())[-1]
+    draft = _PENDING_CONFIRMATIONS.pop(target_id, None)
+    if not draft:
+        return {"ok": False, "error": f"Draft '{target_id}' not found."}
+
+    res = send_whatsapp(draft["recipient"], draft["message"])
+    return {
+        "ok": res.get("ok", False),
+        "message": f"Confirmed and sent WhatsApp message to {draft['recipient']}.",
+        "details": res
+    }
+
+
+

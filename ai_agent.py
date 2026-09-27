@@ -607,6 +607,98 @@ class AIAgent:
                 voice.speak(out)
             return out
 
+        # 2c. WhatsApp Focus Mode & Unread Fast-Path
+        if any(k in lower for k in ("unread whatsapp", "whatsapp unread", "check whatsapp", "any new messages", "check unread")):
+            res = execute_tool("checkWhatsAppUnread", {})
+            if isinstance(res, dict) and res.get("has_unread"):
+                out = f"Sir, you have {res.get('unread_count')} unread WhatsApp messages."
+            else:
+                out = "You have no unread WhatsApp messages, Sir."
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        if "focus mode" in lower:
+            enable = not any(k in lower for k in ("off", "disable", "band", "deactivate"))
+            res = execute_tool("setWhatsAppFocusMode", {"enabled": enable})
+            out = f"WhatsApp focus mode is now {'enabled' if enable else 'disabled'}, Sir."
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        # 2d. Second Brain / Obsidian Notes Fast-Path
+        m_notes = (
+            re.search(r'(?:search\s+notes\s+(?:for\s+)?|notes\s+(?:me\s+)?search\s+(?:karo\s+)?|find\s+in\s+notes\s+)(.+)', lower)
+            or re.search(r'(?:check\s+obsidian\s+(?:for\s+)?|obsidian\s+search\s+)(.+)', lower)
+        )
+        if m_notes:
+            q = m_notes.group(1).strip()
+            if on_tool_call:
+                on_tool_call("queryObsidianKnowledgeBase", {"query": q})
+            res = execute_tool("queryObsidianKnowledgeBase", {"query": q, "top_k": 3})
+            if on_tool_result:
+                on_tool_result("queryObsidianKnowledgeBase", res)
+            count = res.get("count", 0) if isinstance(res, dict) else 0
+            if count > 0:
+                first_match = res.get("results", [{}])[0]
+                out = f"Found {count} matching notes in your Second Brain. Most relevant: {first_match.get('heading', 'Note')} from {first_match.get('path')}."
+            else:
+                out = f"I could not find any notes matching '{q}' in your Obsidian Vault, Sir."
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        # 2e. Autonomous Developer & Testing Fast-Path
+        if lower in ("run tests", "run test suite", "test run karo", "run unit tests", "execute tests"):
+            if on_tool_call:
+                on_tool_call("runUnitTests", {})
+            res = execute_tool("runUnitTests", {})
+            if on_tool_result:
+                on_tool_result("runUnitTests", res)
+            passed = res.get("ok", False)
+            out = "All unit tests passed successfully, Sir!" if passed else "Some unit tests failed, Sir. Reviewing output."
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        if lower in ("git status", "check git", "git status check karo"):
+            res = execute_tool("gitAutomate", {"action": "status"})
+            out = f"Git status: {res.get('status', 'Clean')}"
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        if lower.startswith("self heal") or lower.startswith("auto fix"):
+            m_cmd = re.search(r'(?:self\s+heal|auto\s+fix)\s+(.+)', lower)
+            cmd_to_heal = m_cmd.group(1).strip() if m_cmd else "pytest"
+            if on_tool_call:
+                on_tool_call("runAutonomousCodeRepair", {"command": cmd_to_heal})
+            res = execute_tool("runAutonomousCodeRepair", {"command": cmd_to_heal, "max_attempts": 3})
+            if on_tool_result:
+                on_tool_result("runAutonomousCodeRepair", res)
+            out = res.get("message", "Self-healing cycle complete.")
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        # 2f. Visual UI Grounding Fast-Path
+        m_click = (
+            re.match(r"(?:click|tap|press)\s+(?:on\s+)?(?:the\s+)?(.+)", lower)
+            or re.match(r"screen\s+pe\s+(.+?)\s+(?:pe\s+)?(?:click|dabao)\s*karo", lower)
+        )
+        if m_click and not any(k in lower for k in ("mouse", "right click", "double click", "link", "here", "enter", "space", "esc", "tab", "whatsapp", "app", "window")):
+            target_elem = m_click.group(1).strip()
+            if target_elem not in ("start", "enter", "space", "esc", "tab", "mute", "volume", "music"):
+                if on_tool_call:
+                    on_tool_call("locateAndClickUI", {"element": target_elem})
+                res = execute_tool("locateAndClickUI", {"element": target_elem})
+                if on_tool_result:
+                    on_tool_result("locateAndClickUI", res)
+                out = res.get("message") if isinstance(res, dict) and res.get("ok") else (res.get("error") if isinstance(res, dict) else str(res))
+                if voice.tts_enabled:
+                    voice.speak(out)
+                return out
+
         # 3. Open applications or websites
         m_app = (
             re.match(r"(?:open|launch|start|kholo|chalao)\s+(?:the\s+)?(?:app\s+)?([a-zA-Z0-9\s\.\-_]+)", lower)

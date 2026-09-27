@@ -536,6 +536,55 @@ async def dispatch_tool(name: str, args: dict, player, speak, loop) -> str:
                 r = await loop.run_in_executor(None, lambda: cancel_scheduled_call(identifier=ident))
                 result = r.get("message") if isinstance(r, dict) else str(r)
 
+        elif name in ("locateAndClickUI", "clickElementOnScreen", "locate_and_click_ui"):
+            from desktop_agent.tools_screenshot import locate_and_click_ui
+            r = await loop.run_in_executor(None, lambda: locate_and_click_ui(args))
+            result = r.get("message") if isinstance(r, dict) and r.get("ok") else (r.get("error") if isinstance(r, dict) else str(r))
+
+        elif name in ("queryObsidianKnowledgeBase", "query_obsidian_kb"):
+            import obsidian_rag
+            q = args.get("query") or args.get("prompt") or ""
+            k = int(args.get("top_k") or 5)
+            r = await loop.run_in_executor(None, lambda: obsidian_rag.query_knowledge_base(q, top_k=k))
+            result = r.get("context") if isinstance(r, dict) else str(r)
+
+        elif name in ("syncObsidianVault", "sync_obsidian_vault"):
+            import obsidian_rag
+            r = await loop.run_in_executor(None, obsidian_rag.sync_vault)
+            result = json.dumps(r) if isinstance(r, dict) else str(r)
+
+        elif name in ("checkWhatsAppUnread", "check_whatsapp_unread"):
+            from whatsapp_manager import check_unread_whatsapp_messages
+            r = await loop.run_in_executor(None, check_unread_whatsapp_messages)
+            if isinstance(r, dict) and r.get("has_unread"):
+                result = f"Sir, you have {r.get('unread_count')} unread WhatsApp messages."
+            else:
+                result = "No unread WhatsApp messages at this time, Sir."
+
+        elif name in ("setWhatsAppFocusMode", "set_whatsapp_focus_mode"):
+            from whatsapp_manager import set_whatsapp_focus_mode
+            en = bool(args.get("enabled", True))
+            rep = args.get("reply_message")
+            r = await loop.run_in_executor(None, lambda: set_whatsapp_focus_mode(en, rep))
+            result = r.get("message") if isinstance(r, dict) else str(r)
+
+        elif name in ("startWhatsAppWatcher", "start_whatsapp_watcher"):
+            from whatsapp_manager import start_whatsapp_unread_watcher
+            r = await loop.run_in_executor(None, start_whatsapp_unread_watcher)
+            result = r.get("message") if isinstance(r, dict) else str(r)
+
+        elif name in ("stopWhatsAppWatcher", "stop_whatsapp_watcher"):
+            from whatsapp_manager import stop_whatsapp_unread_watcher
+            r = await loop.run_in_executor(None, stop_whatsapp_unread_watcher)
+            result = r.get("message") if isinstance(r, dict) else str(r)
+
+        elif name in ("runAutonomousCodeRepair", "autonomous_code_repair_loop"):
+            from claw_developer import autonomous_code_repair_loop
+            cmd = args.get("command", "")
+            attempts = int(args.get("max_attempts") or 3)
+            r = await loop.run_in_executor(None, lambda: autonomous_code_repair_loop(cmd, max_attempts=attempts))
+            result = r.get("message") if isinstance(r, dict) else str(r)
+
         elif name == "realtime_knowledge":
             query = args.get("query", "")
             r = await loop.run_in_executor(None, lambda: run_fetch_realtime_knowledge(query=query))

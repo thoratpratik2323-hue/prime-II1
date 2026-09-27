@@ -1572,6 +1572,109 @@ def _handle_extract_video_frames(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"Failed to extract video frames: {e}"}
 
 
+def _handle_locate_and_click_ui(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from desktop_agent.tools_screenshot import locate_and_click_ui
+        return locate_and_click_ui(args)
+    except Exception as e:
+        return {"ok": False, "error": f"locateAndClickUI error: {e}"}
+
+
+def _handle_query_obsidian_kb(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import obsidian_rag
+        query = str(args.get("query") or args.get("prompt") or "").strip()
+        top_k = int(args.get("top_k") or 5)
+        return obsidian_rag.query_knowledge_base(query, top_k=top_k)
+    except Exception as e:
+        return {"ok": False, "error": f"queryObsidianKnowledgeBase error: {e}"}
+
+
+def _handle_sync_obsidian_vault(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import obsidian_rag
+        return obsidian_rag.sync_vault()
+    except Exception as e:
+        return {"ok": False, "error": f"syncObsidianVault error: {e}"}
+
+
+def _handle_auto_record_decision(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import obsidian_rag
+        topic = str(args.get("topic") or "System Decision").strip()
+        decision = str(args.get("decision") or "").strip()
+        details = str(args.get("details") or "").strip()
+        msg = obsidian_rag.auto_record_session_decision(topic, decision, details)
+        return {"ok": True, "message": msg}
+    except Exception as e:
+        return {"ok": False, "error": f"autoRecordDecision error: {e}"}
+
+
+def _handle_check_whatsapp_unread(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import whatsapp_manager
+        return whatsapp_manager.check_unread_whatsapp_messages()
+    except Exception as e:
+        return {"ok": False, "error": f"checkWhatsAppUnread error: {e}"}
+
+
+def _handle_set_whatsapp_focus_mode(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import whatsapp_manager
+        enabled = bool(args.get("enabled", True))
+        reply = args.get("reply_message")
+        return whatsapp_manager.set_whatsapp_focus_mode(enabled, reply)
+    except Exception as e:
+        return {"ok": False, "error": f"setWhatsAppFocusMode error: {e}"}
+
+
+def _handle_start_whatsapp_watcher(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import whatsapp_manager
+        return whatsapp_manager.start_whatsapp_unread_watcher()
+    except Exception as e:
+        return {"ok": False, "error": f"startWhatsAppWatcher error: {e}"}
+
+
+def _handle_stop_whatsapp_watcher(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import whatsapp_manager
+        return whatsapp_manager.stop_whatsapp_unread_watcher()
+    except Exception as e:
+        return {"ok": False, "error": f"stopWhatsAppWatcher error: {e}"}
+
+
+def _handle_draft_whatsapp_with_confirmation(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import whatsapp_manager
+        rec = str(args.get("recipient") or "").strip()
+        msg = str(args.get("message") or "").strip()
+        return whatsapp_manager.draft_whatsapp_with_confirmation(rec, msg)
+    except Exception as e:
+        return {"ok": False, "error": f"draftWhatsAppWithConfirmation error: {e}"}
+
+
+def _handle_confirm_and_send_whatsapp_draft(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import whatsapp_manager
+        draft_id = args.get("draft_id")
+        return whatsapp_manager.confirm_and_send_draft(draft_id)
+    except Exception as e:
+        return {"ok": False, "error": f"confirmAndSendWhatsAppDraft error: {e}"}
+
+
+def _handle_run_autonomous_code_repair(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        import claw_developer
+        command = str(args.get("command") or "").strip()
+        max_attempts = int(args.get("max_attempts") or 3)
+        cwd = args.get("cwd")
+        auto_commit = bool(args.get("auto_commit", False))
+        return claw_developer.autonomous_code_repair_loop(command, max_attempts=max_attempts, cwd=cwd, auto_commit=auto_commit)
+    except Exception as e:
+        return {"ok": False, "error": f"runAutonomousCodeRepair error: {e}"}
+
+
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
     "getTime": _handle_time,
@@ -1587,6 +1690,11 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "searchObsidianNotes": _handle_search_obsidian_notes,
     "readObsidianNote": _handle_read_obsidian_note,
     "writeObsidianNote": _handle_write_obsidian_note,
+    "queryObsidianKnowledgeBase": _handle_query_obsidian_kb,
+    "syncObsidianVault": _handle_sync_obsidian_vault,
+    "autoRecordDecision": _handle_auto_record_decision,
+    "locateAndClickUI": _handle_locate_and_click_ui,
+    "clickElementOnScreen": _handle_locate_and_click_ui,
     "getWeather": _handle_get_weather,
     "morningBriefing": _handle_morning_briefing,
     "mediaControl": _handle_media_control,
@@ -1621,6 +1729,13 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "listScheduledWhatsAppCalls": _handle_list_scheduled_calls,
     "cancelScheduledWhatsAppCall": _handle_cancel_scheduled_call,
     "transcribeWhatsAppAudio": _handle_transcribe_whatsapp_audio,
+    "checkWhatsAppUnread": _handle_check_whatsapp_unread,
+    "setWhatsAppFocusMode": _handle_set_whatsapp_focus_mode,
+    "startWhatsAppWatcher": _handle_start_whatsapp_watcher,
+    "stopWhatsAppWatcher": _handle_stop_whatsapp_watcher,
+    "draftWhatsAppWithConfirmation": _handle_draft_whatsapp_with_confirmation,
+    "confirmAndSendWhatsAppDraft": _handle_confirm_and_send_whatsapp_draft,
+    "runAutonomousCodeRepair": _handle_run_autonomous_code_repair,
     "searchSecondBrainSemantic": _handle_search_second_brain_semantic,
     "crystallizeDevLog": _handle_crystallize_dev_log,
     "interceptTerminalError": _handle_intercept_terminal_error,

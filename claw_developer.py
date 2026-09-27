@@ -295,3 +295,130 @@ def debug_file(
         }
     except Exception as e:
         return {"ok": False, "error": f"Debugging failed: {e}"}
+
+
+def autonomous_code_repair_loop(
+    command: str,
+    max_attempts: int = 3,
+    cwd: Optional[str] = None,
+    auto_commit: bool = False
+) -> Dict[str, Any]:
+    """
+    Autonomous Self-Healing Execution Loop:
+    Executes a test/build/script command. If it fails, diagnoses the failure,
+    surgically patches the offending code, and verifies until all checks pass.
+    """
+    target_cwd = Path(cwd).resolve() if cwd else Path.cwd()
+    history = []
+
+    for attempt in range(1, max_attempts + 1):
+        log.info("Self-healing loop attempt %d/%d for '%s'", attempt, max_attempts, command)
+        res = run_terminal_command(command, cwd=str(target_cwd), timeout=120)
+
+        output = (res.get("stdout") or "") + "\n" + (res.get("stderr") or "")
+        passed = res.get("ok", False) or ("passed" in output.lower() and "failed" not in output.lower())
+
+        if passed and res.get("returncode", 0) == 0:
+            msg = f"Command succeeded on attempt {attempt}."
+            if auto_commit and attempt > 1:
+                git_automate(action="commit", message="fix(autonomous): resolve runtime failure in test loop", cwd=str(target_cwd))
+            return {
+                "ok": True,
+                "passed": True,
+                "attempt": attempt,
+                "message": msg,
+                "output": output[:2000],
+                "patches_applied": len(history),
+                "history": history
+            }
+
+        # Failure occurred — attempt surgical diagnosis and repair
+        error_sample = output[-3500:] if len(output) > 3500 else output
+
+        # Identify failing source file in repository
+        failing_file = None
+        matches = re.findall(r'File\s+"([^"]+\.py)"', error_sample)
+        for m in reversed(matches):
+            p = Path(m)
+            if not p.is_absolute():
+                p = (target_cwd / p).resolve()
+            if p.exists() and str(target_cwd) in str(p):
+                failing_file = str(p)
+                break
+
+        if not failing_file:
+            # Check for generic filename patterns
+            file_match = re.search(r'([\w\-_/\\\.]+\.py)(?::\d+|:\s*error)', error_sample)
+            if file_match:
+                cand = (target_cwd / file_match.group(1)).resolve()
+                if cand.exists() and cand.is_file():
+                    failing_file = str(cand)
+
+        if not failing_file:
+            return {
+                "ok": False,
+                "passed": False,
+                "attempt": attempt,
+                "error": "Failed to pinpoint source file from stack trace.",
+                "output": error_sample,
+                "history": history
+            }
+
+        # Analyze and get surgical patch
+        try:
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=config.gemini_api_key)
+
+            target_path = Path(failing_file)
+            file_text = target_path.read_text(encoding="utf-8", errors="replace")
+
+            prompt = (
+                f"You are the Prime Autonomous Software Engineering Engine (Claw Code).\n"
+                f"A command failed: '{command}'\n"
+                f"Failing file: {target_path.name}\n"
+                f"--- ERROR TRACE ---\n{error_sample}\n--- END ERROR ---\n\n"
+                f"--- CURRENT FILE CONTENT ---\n{file_text[:12000]}\n--- END FILE ---\n\n"
+                "Diagnose the failure and provide the exact search block and replacement block to fix it.\n"
+                "Return ONLY a JSON object with keys:\n"
+                "{\n"
+                "  \"diagnosis\": \"short explanation\",\n"
+                "  \"search_block\": \"exact code substring from current file to replace\",\n"
+                "  \"replace_block\": \"replacement code\"\n"
+                "}"
+            )
+
+            repair_resp = client.models.generate_content(
+                model=config.default_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json")
+            )
+
+            patch_data = json.loads(repair_resp.text.strip())
+            s_block = patch_data.get("search_block")
+            r_block = patch_data.get("replace_block")
+
+            if s_block and r_block:
+                patch_res = patch_file(str(target_path), s_block, r_block)
+                history.append({
+                    "attempt": attempt,
+                    "file": str(target_path),
+                    "diagnosis": patch_data.get("diagnosis", ""),
+                    "patch_result": patch_res
+                })
+                if not patch_res.get("ok"):
+                    log.warning("Patch application failed on attempt %d: %s", attempt, patch_res.get("error"))
+            else:
+                history.append({"attempt": attempt, "error": "LLM did not return valid search_block/replace_block"})
+
+        except Exception as e:
+            history.append({"attempt": attempt, "error": f"Diagnosis exception: {e}"})
+
+    return {
+        "ok": False,
+        "passed": False,
+        "attempts": max_attempts,
+        "message": f"Self-healing loop did not pass after {max_attempts} attempts.",
+        "history": history
+    }
+

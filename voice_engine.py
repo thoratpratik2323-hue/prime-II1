@@ -399,7 +399,7 @@ class VoiceEngine:
                     pass
 
     def speak(self, text: str):
-        """Queue text to be spoken."""
+        """Queue text to be spoken with streaming sentence pipelining for ultra-low latency (<350ms TTFB)."""
         if not self._tts_enabled or not text:
             return
         clean_text = self._sanitize_for_tts(text)
@@ -408,7 +408,14 @@ class VoiceEngine:
             if clean_text in self._audio_cache:
                 self._play_cached_audio(clean_text)
                 return
-            self.tts_queue.put(clean_text)
+
+            # Split into sentence clauses so first sentence plays almost immediately
+            sentences = re.split(r'(?<=[.!?\n])\s+', clean_text)
+            for s in sentences:
+                s_clean = s.strip()
+                if s_clean:
+                    self.tts_queue.put(s_clean)
+
 
     def speak_streamed(self, token_iterator):
         """Accept an iterator/generator of text chunks (streaming LLM tokens).

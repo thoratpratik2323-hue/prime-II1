@@ -71,6 +71,12 @@ def register(name: str):
     return deco
 
 
+def get_tool(name: str) -> Optional[Callable[[Dict[str, Any]], Dict[str, Any]]]:
+    """Retrieve a registered tool handler by name."""
+    return TOOLS.get(name)
+
+
+
 # The set of all tool names MYRAA may route to this agent.
 # Kept in sync with the functionDeclarations added in server.ts.
 DESKTOP_TOOL_NAMES = [
@@ -113,6 +119,7 @@ DESKTOP_TOOL_NAMES = [
     "saveScreenshot",
     "analyzeScreenshot",
     "readScreen",
+    "locateAndClickUI",
     # browser automation (Playwright — desktop-owned, separate from holographic UI)
     "desktopBrowserOpen",
     "desktopBrowserNavigate",
