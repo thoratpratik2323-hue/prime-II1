@@ -389,6 +389,19 @@ def launch_on_interactive_desktop(cmd: str) -> bool:
         return False
 
 
+def attach_thread_to_default_desktop():
+    """Attach calling thread to the user's physical interactive screen (WinSta0\\Default)."""
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            u32 = ctypes.windll.user32
+            h_desk = u32.OpenDesktopW("Default", 0, False, 0x01FF)
+            if h_desk:
+                u32.SetThreadDesktop(h_desk)
+        except Exception as e:
+            log.debug("attach_thread_to_default_desktop error: %s", e)
+
+
 def run_on_interactive_thread(fn: Callable[..., Any], *args, **kwargs) -> Any:
     """
     Executes a function in a freshly spawned thread attached to the user's physical desktop (WinSta0\\Default).
@@ -507,19 +520,30 @@ def _focus_whatsapp_window_raw() -> bool:
         # Determine primary window to bring to front
         primary = shell_h or browser_h or webview_h
         if primary:
+            # Unlock foreground rights using ALT key tap
+            u32.keybd_event(0x12, 0x38, 0, 0)
+            u32.keybd_event(0x12, 0x38, 2, 0)
+
             curr_tid = ctypes.windll.kernel32.GetCurrentThreadId()
             fore_hwnd = u32.GetForegroundWindow()
             fore_tid = u32.GetWindowThreadProcessId(fore_hwnd, None)
+            target_tid = u32.GetWindowThreadProcessId(primary, None)
             u32.AttachThreadInput(curr_tid, fore_tid, True)
+            u32.AttachThreadInput(curr_tid, target_tid, True)
 
             u32.ShowWindow(primary, 9)  # SW_RESTORE
             u32.ShowWindow(primary, 5)  # SW_SHOW
             u32.SetForegroundWindow(primary)
             u32.BringWindowToTop(primary)
 
+            if webview_h and webview_h != primary:
+                u32.ShowWindow(webview_h, 9)
+                u32.BringWindowToTop(webview_h)
+
             focus_target = render_h or webview_h or primary
             u32.SetFocus(focus_target)
             u32.AttachThreadInput(curr_tid, fore_tid, False)
+            u32.AttachThreadInput(curr_tid, target_tid, False)
             log.info("Focused WhatsApp window: Primary HWND %s, Input Target HWND %s", primary, focus_target)
             return True
     except Exception as e:
@@ -536,10 +560,11 @@ def press_enter_interactive():
     """
     Simulates genuine hardware-level Enter keystroke on interactive desktop.
     Combines:
-    1. Direct WM_KEYDOWN / WM_KEYUP window message to Chrome_RenderWidgetHostHWND
-    2. 64-bit SendInput with hardware scan code 0x1C (WinUI / UWP compliant)
-    3. Native keybd_event with scan code 0x1C
-    4. PyAutoGUI enter press fallback
+    1. WScript.Shell SendKeys("{ENTER}") (bypasses Windows UIPI)
+    2. Direct WM_KEYDOWN / WM_KEYUP window message to Chrome_RenderWidgetHostHWND
+    3. 64-bit SendInput with hardware scan code 0x1C (40-byte compliant)
+    4. Native keybd_event with scan code 0x1C
+    5. PyAutoGUI enter press fallback
     """
     if platform.system() != "Windows":
         try:
@@ -553,7 +578,15 @@ def press_enter_interactive():
     from ctypes import wintypes
     u32 = ctypes.windll.user32
 
-    # 1. Direct PostMessage to WebView2 Chrome_RenderWidgetHostHWND (instant Chromium input processing)
+    # 1. Windows Shell SendKeys (unrestricted shell hook)
+    try:
+        import win32com.client
+        w = win32com.client.Dispatch("WScript.Shell")
+        w.SendKeys("{ENTER}")
+    except Exception as e:
+        log.debug("WScript.Shell SendKeys failed: %s", e)
+
+    # 2. Direct PostMessage to WebView2 Chrome_RenderWidgetHostHWND (instant Chromium input processing)
     global _LAST_WHATSAPP_RENDER_HWND
     if _LAST_WHATSAPP_RENDER_HWND and u32.IsWindow(_LAST_WHATSAPP_RENDER_HWND):
         try:
@@ -565,7 +598,7 @@ def press_enter_interactive():
         except Exception as e:
             log.debug("PostMessage to render host failed: %s", e)
 
-    # 2. Hardware-level SendInput with scan code 0x1C (accepted by WinUI / XAML / UWP)
+    # 3. Hardware-level SendInput with scan code 0x1C (accepted by WinUI / XAML / UWP)
     try:
         ULONG_PTR = ctypes.c_ulonglong
 
@@ -625,7 +658,7 @@ def press_enter_interactive():
     except Exception as e:
         log.debug("SendInput failed: %s", e)
 
-    # 3. Native keybd_event WITH hardware scan code 0x1C
+    # 4. Native keybd_event WITH hardware scan code 0x1C
     try:
         u32.keybd_event(0x0D, 0x1C, 0, 0)
         time.sleep(0.04)
@@ -633,7 +666,7 @@ def press_enter_interactive():
     except Exception as e:
         log.debug("keybd_event failed: %s", e)
 
-    # 4. PyAutoGUI press fallback
+    # 5. PyAutoGUI press fallback
     try:
         import pyautogui
         pyautogui.press("enter")
@@ -651,10 +684,10 @@ def send_via_desktop_protocol(phone_number: str, message: str) -> Dict[str, Any]
         # 1. Launch URI on interactive desktop
         launch_on_interactive_desktop(f'explorer.exe "{uri}"')
 
-        # 2. Progressive multi-burst Enter dispatch (at 2.8s, 4.0s, 5.2s, 6.5s)
+        # 2. Progressive multi-burst Enter dispatch (at 2.0s, 3.2s, 4.4s, 5.8s, 7.2s)
         # This completely guarantees the message is sent regardless of whether
         # WhatsApp Desktop takes 2s or 5s to load the draft into the compose box!
-        burst_delays = [2.8, 1.2, 1.2, 1.3]
+        burst_delays = [2.0, 1.2, 1.2, 1.4, 1.4]
         for delay in burst_delays:
             time.sleep(delay)
             _focus_whatsapp_window_raw()
