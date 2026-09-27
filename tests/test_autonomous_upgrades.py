@@ -168,6 +168,33 @@ class TestVoiceEngineLowLatency(unittest.TestCase):
         self.assertIn("All systems are operational.", calls[1])
         self.assertIn("WhatsApp watcher is active.", calls[2])
 
+    def test_sagar_tamang_ultron_and_friday_voice_routing(self):
+        from voice_engine import voice
+        orig_voice = voice.current_voice
+        orig_filter = voice.stark_filter_enabled
+        try:
+            # Test Ultron voice activation & automatic Stark DSP filter
+            res_ultron = voice.set_voice("ultron")
+            self.assertEqual(res_ultron, "ultron")
+            self.assertTrue(voice.stark_filter_enabled)
+            self.assertAlmostEqual(voice.stark_filter_intensity, 0.75)
+
+            # Test Friday voice activation
+            res_friday = voice.set_voice("friday")
+            self.assertEqual(res_friday, "friday")
+
+            # Test Onyx alias
+            res_onyx = voice.set_voice("onyx")
+            self.assertEqual(res_onyx, "ultron")
+            self.assertTrue(voice.stark_filter_enabled)
+
+            # Test Nova alias
+            res_nova = voice.set_voice("nova")
+            self.assertEqual(res_nova, "friday")
+        finally:
+            voice.set_voice(orig_voice)
+            voice.stark_filter_enabled = orig_filter
+
 
 class TestStarkIntercomAudioDSP(unittest.TestCase):
     """Feature 6: Cinematic Intercom / Stark Radio Audio DSP Filter Tests."""

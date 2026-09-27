@@ -35,7 +35,22 @@ MARK_LIV_GEMINI_VOICES: Dict[str, str] = {
     "aoede": "Aoede",         # Breezy, calm
 }
 
+OPENAI_TTS_VOICES: Dict[str, str] = {
+    "nova": "nova",               # Sagar Tamang F.R.I.D.A.Y. signature voice
+    "onyx": "onyx",               # Sagar Tamang U.L.T.R.O.N. deep baritone
+    "echo": "echo",               # Warm resonant male
+    "alloy": "alloy",             # Balanced neutral
+    "fable": "fable",             # Expressive British
+    "shimmer": "shimmer",         # Clear bright female
+    "ultron": "onyx",             # Ultron alias
+    "friday": "nova",             # F.R.I.D.A.Y. alias
+}
+
 EDGE_NEURAL_VOICES: Dict[str, str] = {
+    "ultron": "en-US-ChristopherNeural",     # Ultron deep cinematic male (Sagar Tamang build)
+    "friday": "en-US-AvaNeural",             # F.R.I.D.A.Y. / Nova clear natural female
+    "nova": "en-US-AvaNeural",               # Nova (matches OpenAI nova)
+    "onyx": "en-US-ChristopherNeural",       # Onyx (matches OpenAI onyx)
     "brian": "en-US-BrianMultilingualNeural",# Ultra-cool modern AI companion (fluent in English & Hindi)
     "andrew": "en-US-AndrewMultilingualNeural",# Suave & charismatic multilingual
     "christopher": "en-US-ChristopherNeural",# American deep baritone
@@ -150,13 +165,14 @@ class VoiceEngine:
         self._abort_utterance = threading.Event()
         self._is_speaking = False
         self._tts_enabled = config.voice_output
-        self.current_voice = config.tts_voice or "Charon"
+        self.current_voice = config.tts_voice or "ultron"
         self._genai_client = None
         self._genai_api_key = None
 
         # Cinematic Stark Intercom Audio Filter
         self.stark_filter_enabled = os.getenv("STARK_AUDIO_FILTER", "true").lower() in ("true", "1", "yes")
-        self.stark_filter_intensity = float(os.getenv("STARK_FILTER_INTENSITY", "0.65"))
+        default_intensity = "0.75" if "ultron" in str(self.current_voice).lower() or "onyx" in str(self.current_voice).lower() else "0.65"
+        self.stark_filter_intensity = float(os.getenv("STARK_FILTER_INTENSITY", default_intensity))
 
         # Speech recognition
         self.recognizer = sr.Recognizer()
@@ -168,7 +184,6 @@ class VoiceEngine:
             pygame.mixer.init(frequency=24000, size=-16, channels=2, buffer=2048)
         except Exception as e:
             log.warning("Could not init pygame.mixer: %s", e)
-
 
         # Start TTS background worker
         self._start_tts_worker()
@@ -186,13 +201,21 @@ class VoiceEngine:
         self._tts_enabled = bool(val)
 
     def set_voice(self, voice_name: str) -> str:
-        """Set active voice (e.g. 'charon', 'puck', 'fenrir', 'ryan', 'guy', 'david')."""
+        """Set active voice (e.g. 'ultron', 'friday', 'nova', 'onyx', 'charon', 'ryan', etc.)."""
         clean = (voice_name or '').strip().lower()
         if not clean:
             return self.current_voice
         resolved = None
 
-        if clean in MARK_LIV_GEMINI_VOICES:
+        if clean in ("ultron", "onyx"):
+            resolved = "ultron"
+            self.stark_filter_enabled = True
+            self.stark_filter_intensity = 0.75
+        elif clean in ("friday", "nova"):
+            resolved = "friday"
+        elif clean in OPENAI_TTS_VOICES:
+            resolved = clean
+        elif clean in MARK_LIV_GEMINI_VOICES:
             resolved = MARK_LIV_GEMINI_VOICES[clean]
         elif clean in [v.lower() for v in MARK_LIV_GEMINI_VOICES.values()]:
             resolved = next(v for v in MARK_LIV_GEMINI_VOICES.values() if v.lower() == clean)
@@ -206,12 +229,19 @@ class VoiceEngine:
             # Direct match
             resolved = voice_name.strip()
 
+        # Auto-enable Stark Intercom filter for Ultron and Onyx voices to produce that authentic metallic baritone
+        if clean in ("ultron", "onyx") or (isinstance(resolved, str) and any(k in resolved.lower() for k in ("ultron", "onyx"))):
+            self.stark_filter_enabled = True
+            self.stark_filter_intensity = 0.75
+
         self.current_voice = resolved
         config.set_voice(resolved)
         return resolved
 
     def get_available_voices(self) -> Dict[str, List[str]]:
         return {
+            "sagar_ultron_friday": ["ultron", "friday", "nova", "onyx"],
+            "openai": list(OPENAI_TTS_VOICES.values()),
             "mark_liv_gemini": list(MARK_LIV_GEMINI_VOICES.values()),
             "edge_neural": list(EDGE_NEURAL_VOICES.values()),
             "offline": ["Microsoft David"],
@@ -246,25 +276,36 @@ class VoiceEngine:
                 try:
                     played = False
                     curr = self.current_voice.strip()
+                    curr_lower = curr.lower()
 
                     # 1. Check if configured for Mark-LIV Gemini voice (only if tts_engine is explicitly 'gemini')
                     use_gemini_engine = getattr(config, "tts_engine", "edge-tts") == "gemini"
-                    is_gemini_voice = curr in MARK_LIV_GEMINI_VOICES.values() or curr.lower() in MARK_LIV_GEMINI_VOICES
+                    is_gemini_voice = curr in MARK_LIV_GEMINI_VOICES.values() or curr_lower in MARK_LIV_GEMINI_VOICES
                     if use_gemini_engine and is_gemini_voice and config.gemini_api_key:
-                        target_voice = MARK_LIV_GEMINI_VOICES.get(curr.lower(), curr)
+                        target_voice = MARK_LIV_GEMINI_VOICES.get(curr_lower, curr)
                         played = self._speak_gemini_tts(text, target_voice)
 
-                    # 2. If not Gemini or Gemini failed, try Edge-TTS Neural voice
-                    if not played and curr.lower() != "david":
-                        if "ryan" in curr.lower() or "en-gb" in curr.lower():
+                    # 2. Check OpenAI TTS (Sagar Tamang Ultron/Friday or OpenAI voices) if OpenAI key available
+                    if not played and (curr_lower in OPENAI_TTS_VOICES or getattr(config, "tts_engine", "") == "openai"):
+                        openai_voice = OPENAI_TTS_VOICES.get(curr_lower, "onyx" if "ultron" in curr_lower else "nova")
+                        if getattr(config, "openai_api_key", None) or os.getenv("OPENAI_API_KEY"):
+                            played = self._speak_openai_tts(text, openai_voice)
+
+                    # 3. If not Gemini/OpenAI or if they failed, try Edge-TTS Neural voice (Zero-credential fallback!)
+                    if not played and curr_lower != "david":
+                        if "ryan" in curr_lower or "en-gb" in curr_lower:
                             edge_voice = "hi-IN-MadhurNeural" if re.search(r"[\u0900-\u097f]", text) else "en-GB-RyanNeural"
                         elif is_hindi_or_hinglish(text):
-                            edge_voice = "hi-IN-SwaraNeural" if any(k in curr.lower() for k in ("female", "swara", "neerja", "sonia")) else "hi-IN-MadhurNeural"
+                            edge_voice = "hi-IN-SwaraNeural" if any(k in curr_lower for k in ("female", "swara", "neerja", "sonia", "friday", "nova", "ava")) else "hi-IN-MadhurNeural"
+                        elif curr_lower in ("ultron", "onyx"):
+                            edge_voice = "en-US-ChristopherNeural"
+                        elif curr_lower in ("friday", "nova"):
+                            edge_voice = "en-US-AvaNeural"
                         else:
-                            edge_voice = EDGE_NEURAL_VOICES.get(curr.lower(), curr if 'neural' in curr.lower() else 'en-GB-RyanNeural')
+                            edge_voice = EDGE_NEURAL_VOICES.get(curr_lower, curr if 'neural' in curr_lower else 'en-US-ChristopherNeural' if curr_lower in ('ultron', 'onyx') else 'en-GB-RyanNeural')
                         played = loop.run_until_complete(self._speak_edge_tts(text, edge_voice))
 
-                    # 3. Final Fallback: Offline pyttsx3 (Microsoft David)
+                    # 4. Final Fallback: Offline pyttsx3 (Microsoft David)
                     if not played:
                         self._speak_pyttsx3_male(text)
 
@@ -398,27 +439,9 @@ class VoiceEngine:
         log.info("Stark Intercom Audio Filter %s (intensity=%.2f)", "ENABLED" if self.stark_filter_enabled else "DISABLED", self.stark_filter_intensity)
         return self.stark_filter_enabled
 
-    async def _speak_edge_tts(self, text: str, voice_name: str = "hi-IN-MadhurNeural") -> bool:
-        """Synthesize with Edge-TTS neural voice and play with Stark Intercom Filter in-memory."""
+    def _play_audio_stream(self, buf: io.BytesIO) -> bool:
+        """Play in-memory audio stream (MP3/WAV) with optional Stark Intercom filter and abort handling."""
         try:
-            rate_str = self._get_edge_rate()
-            comm = edge_tts.Communicate(
-                text,
-                voice_name,
-                rate=rate_str,
-                volume="+0%",
-                pitch="+0Hz"
-            )
-            buf = io.BytesIO()
-            async for chunk in comm.stream():
-                if self._abort_utterance.is_set():
-                    return False
-                if chunk["type"] == "audio":
-                    buf.write(chunk["data"])
-
-            if buf.tell() == 0:
-                return False
-
             buf.seek(0)
             if not pygame.mixer.get_init():
                 pygame.mixer.init(frequency=24000, size=-16, channels=2, buffer=2048)
@@ -432,10 +455,11 @@ class VoiceEngine:
                     import numpy as np
                     snd = pygame.mixer.Sound(buf)
                     arr = pygame.sndarray.array(snd)
-                    sr = pygame.mixer.get_init()[0]
+                    init_res = pygame.mixer.get_init()
+                    sr = init_res[0] if init_res else 24000
                     filtered_arr = apply_stark_intercom_filter(arr, sample_rate=sr, intensity=self.stark_filter_intensity)
 
-                    channels = pygame.mixer.get_init()[2]
+                    channels = init_res[2] if init_res else 2
                     if channels == 2 and filtered_arr.ndim == 1:
                         filtered_arr = np.column_stack([filtered_arr, filtered_arr])
                     elif channels == 1 and filtered_arr.ndim == 2:
@@ -468,6 +492,52 @@ class VoiceEngine:
                         pass
 
             return True
+        except Exception as e:
+            log.warning("Audio stream playback failed: %s", e)
+            return False
+
+    def _speak_openai_tts(self, text: str, voice_name: str = "onyx") -> bool:
+        """Synthesize using OpenAI TTS API (tts-1) with Sagar Tamang voices ('onyx', 'nova', etc.)."""
+        api_key = getattr(config, "openai_api_key", None) or os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return False
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key)
+            response = client.audio.speech.create(
+                model="tts-1",
+                voice=voice_name,
+                input=text,
+                response_format="mp3"
+            )
+            buf = io.BytesIO(response.content)
+            return self._play_audio_stream(buf)
+        except Exception as e:
+            log.warning("OpenAI TTS speech failed: %s", e)
+            return False
+
+    async def _speak_edge_tts(self, text: str, voice_name: str = "en-US-ChristopherNeural") -> bool:
+        """Synthesize with Edge-TTS neural voice and play with Stark Intercom Filter in-memory."""
+        try:
+            rate_str = self._get_edge_rate()
+            comm = edge_tts.Communicate(
+                text,
+                voice_name,
+                rate=rate_str,
+                volume="+0%",
+                pitch="+0Hz"
+            )
+            buf = io.BytesIO()
+            async for chunk in comm.stream():
+                if self._abort_utterance.is_set():
+                    return False
+                if chunk["type"] == "audio":
+                    buf.write(chunk["data"])
+
+            if buf.tell() == 0:
+                return False
+
+            return self._play_audio_stream(buf)
         except Exception as e:
             log.debug("Edge-TTS speech error: %s", e)
             return False
