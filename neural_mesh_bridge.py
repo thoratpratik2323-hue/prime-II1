@@ -214,6 +214,14 @@ class NeuralMeshBridge:
                 "time": datetime.now().strftime("%I:%M:%S %p"),
             }
 
+        elif action == "phone_battery":
+            from tool_definitions import execute_tool
+            return execute_tool("androidBattery", {})
+
+        elif action == "phone_unlock":
+            from tool_definitions import execute_tool
+            return execute_tool("androidUnlock", {})
+
         return {"ok": False, "error": f"Unknown action '{action}'"}
 
 

@@ -81,6 +81,67 @@ def check_barge_in_phrase(text: str) -> bool:
     )
 
 
+def apply_stark_intercom_filter(
+    audio_data: "np.ndarray",
+    sample_rate: int = 24000,
+    intensity: float = 0.65
+) -> "np.ndarray":
+    """
+    Cinematic Stark Intercom / JARVIS Laboratory DSP Filter:
+    1. Bandpass filter (180 Hz - 6800 Hz): removes muddy sub-bass & harsh digital fizz.
+    2. Peaking presence EQ at 2800 Hz (+3.5 dB): gives crisp vocal intelligibility.
+    3. Warm analog saturation (tanh): gives that authentic helmet intercom harmonics.
+    4. Early reflection: subtle 12ms acoustic reflection simulating an open glass lab.
+    """
+    try:
+        import numpy as np
+        import scipy.signal as signal
+    except ImportError:
+        return audio_data
+
+    if audio_data is None or len(audio_data) == 0:
+        return audio_data
+
+    try:
+        is_stereo = (audio_data.ndim == 2)
+        data = audio_data.astype(np.float32) / 32768.0
+        nyquist = 0.5 * max(8000, sample_rate)
+
+        # 1. Bandpass filter
+        low_cut = max(20.0, min(180.0, nyquist - 100.0))
+        high_cut = max(low_cut + 100.0, min(6800.0, nyquist - 50.0))
+        b_bp, a_bp = signal.butter(2, [low_cut / nyquist, high_cut / nyquist], btype="bandpass")
+        filtered = signal.lfilter(b_bp, a_bp, data, axis=0)
+
+        # 2. Presence Peak at 2800 Hz (peaking biquad)
+        f0 = 2800.0 / nyquist
+        if f0 < 0.95:
+            Q = 1.3
+            A = 10.0 ** (3.5 / 40.0)
+            w0 = np.pi * f0
+            alpha = np.sin(w0) / (2.0 * Q)
+            b_eq = np.array([1.0 + alpha * A, -2.0 * np.cos(w0), 1.0 - alpha * A]) / (1.0 + alpha / A)
+            a_eq = np.array([1.0, -2.0 * np.cos(w0) / (1.0 + alpha / A), (1.0 - alpha / A) / (1.0 + alpha / A)])
+            filtered = signal.lfilter(b_eq, a_eq, filtered, axis=0)
+
+        # 3. Warm analog saturation
+        drive = 1.15
+        saturated = np.tanh(drive * filtered) / np.tanh(drive)
+
+        # 4. Subtle early reflection (12ms delay)
+        delay_samples = int(0.012 * sample_rate)
+        if delay_samples > 0 and len(saturated) > delay_samples:
+            refl = np.zeros_like(saturated)
+            refl[delay_samples:] = saturated[:-delay_samples] * 0.16
+            saturated = saturated * 0.84 + refl
+
+        # Wet/dry mix
+        out = (1.0 - intensity) * data + intensity * saturated
+        return np.clip(out * 32767.0, -32768.0, 32767.0).astype(np.int16)
+    except Exception:
+        return audio_data
+
+
 class VoiceEngine:
     def __init__(self):
         self.tts_queue: queue.Queue[Optional[str]] = queue.Queue()
@@ -93,6 +154,10 @@ class VoiceEngine:
         self._genai_client = None
         self._genai_api_key = None
 
+        # Cinematic Stark Intercom Audio Filter
+        self.stark_filter_enabled = os.getenv("STARK_AUDIO_FILTER", "true").lower() in ("true", "1", "yes")
+        self.stark_filter_intensity = float(os.getenv("STARK_FILTER_INTENSITY", "0.65"))
+
         # Speech recognition
         self.recognizer = sr.Recognizer()
         self.recognizer.energy_threshold = 300
@@ -100,9 +165,10 @@ class VoiceEngine:
 
         # Initialize pygame mixer for audio playback
         try:
-            pygame.mixer.init(frequency=24000, size=-16, channels=1, buffer=2048)
+            pygame.mixer.init(frequency=24000, size=-16, channels=2, buffer=2048)
         except Exception as e:
             log.warning("Could not init pygame.mixer: %s", e)
+
 
         # Start TTS background worker
         self._start_tts_worker()
@@ -261,7 +327,10 @@ class VoiceEngine:
             try:
                 import sounddevice as sd
                 import numpy as np
-                audio_array = np.frombuffer(raw_pcm, dtype=np.int16).astype(np.float32) / 32768.0
+                pcm_arr = np.frombuffer(raw_pcm, dtype=np.int16)
+                if self.stark_filter_enabled:
+                    pcm_arr = apply_stark_intercom_filter(pcm_arr, sample_rate=24000, intensity=self.stark_filter_intensity)
+                audio_array = pcm_arr.astype(np.float32) / 32768.0
                 sd.play(audio_array, samplerate=24000, blocking=False)
                 # Wait for playback with abort support
                 while sd.get_stream().active and not self._abort_utterance.is_set():
@@ -284,7 +353,7 @@ class VoiceEngine:
                     wf.writeframes(raw_pcm)
 
                 if not pygame.mixer.get_init():
-                    pygame.mixer.init(frequency=24000, size=-16, channels=1, buffer=2048)
+                    pygame.mixer.init(frequency=24000, size=-16, channels=2, buffer=2048)
                 clock = pygame.time.Clock()
                 try:
                     pygame.mixer.music.load(temp_wav)
@@ -322,8 +391,15 @@ class VoiceEngine:
             pass
         return "+22%"  # Crisp, lively conversational pace
 
+    def set_stark_filter(self, enabled: bool, intensity: float = 0.65) -> bool:
+        """Toggle or configure the Stark Intercom acoustic filter."""
+        self.stark_filter_enabled = bool(enabled)
+        self.stark_filter_intensity = max(0.0, min(1.0, float(intensity)))
+        log.info("Stark Intercom Audio Filter %s (intensity=%.2f)", "ENABLED" if self.stark_filter_enabled else "DISABLED", self.stark_filter_intensity)
+        return self.stark_filter_enabled
+
     async def _speak_edge_tts(self, text: str, voice_name: str = "hi-IN-MadhurNeural") -> bool:
-        """Synthesize with Edge-TTS neural voice and play in-memory via pygame (zero disk I/O)."""
+        """Synthesize with Edge-TTS neural voice and play with Stark Intercom Filter in-memory."""
         try:
             rate_str = self._get_edge_rate()
             comm = edge_tts.Communicate(
@@ -345,21 +421,51 @@ class VoiceEngine:
 
             buf.seek(0)
             if not pygame.mixer.get_init():
-                pygame.mixer.init(frequency=24000, size=-16, channels=1, buffer=2048)
+                pygame.mixer.init(frequency=24000, size=-16, channels=2, buffer=2048)
 
             clock = pygame.time.Clock()
-            try:
-                pygame.mixer.music.load(buf)
-                pygame.mixer.music.play()
+            played_filtered = False
 
-                while pygame.mixer.music.get_busy() and not self._abort_utterance.is_set():
-                    clock.tick(15)
-            finally:
+            # 1. Apply Cinematic Stark Intercom Filter via pygame sound array
+            if self.stark_filter_enabled:
                 try:
-                    pygame.mixer.music.stop()
-                    pygame.mixer.music.unload()
-                except Exception:
-                    pass
+                    import numpy as np
+                    snd = pygame.mixer.Sound(buf)
+                    arr = pygame.sndarray.array(snd)
+                    sr = pygame.mixer.get_init()[0]
+                    filtered_arr = apply_stark_intercom_filter(arr, sample_rate=sr, intensity=self.stark_filter_intensity)
+
+                    channels = pygame.mixer.get_init()[2]
+                    if channels == 2 and filtered_arr.ndim == 1:
+                        filtered_arr = np.column_stack([filtered_arr, filtered_arr])
+                    elif channels == 1 and filtered_arr.ndim == 2:
+                        filtered_arr = filtered_arr[:, 0]
+
+                    snd_filtered = pygame.sndarray.make_sound(filtered_arr)
+                    channel = snd_filtered.play()
+                    while channel.get_busy() and not self._abort_utterance.is_set():
+                        clock.tick(15)
+                    if self._abort_utterance.is_set():
+                        channel.stop()
+                    played_filtered = True
+                except Exception as filter_err:
+                    log.debug("Stark filter render failed (%s), using standard playback", filter_err)
+
+            # 2. Fallback to standard music stream if filter disabled or failed
+            if not played_filtered:
+                buf.seek(0)
+                try:
+                    pygame.mixer.music.load(buf)
+                    pygame.mixer.music.play()
+
+                    while pygame.mixer.music.get_busy() and not self._abort_utterance.is_set():
+                        clock.tick(15)
+                finally:
+                    try:
+                        pygame.mixer.music.stop()
+                        pygame.mixer.music.unload()
+                    except Exception:
+                        pass
 
             return True
         except Exception as e:

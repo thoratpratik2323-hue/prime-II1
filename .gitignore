@@ -56,4 +56,5 @@ data/voicemail_ledger.json
 config/dnd_state.json
 logs/
 exports/*.zip
-
+bin/
+scratch/

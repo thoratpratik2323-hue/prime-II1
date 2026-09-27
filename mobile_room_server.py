@@ -130,6 +130,56 @@ def api_chat():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/command", methods=["POST"])
+def api_command():
+    """Execute raw voice or text command directly."""
+    data = request.get_json(force=True, silent=True) or {}
+    cmd = data.get("command", "").strip()
+    if not cmd:
+        return jsonify({"ok": False, "error": "Empty command."}), 400
+    try:
+        from ai_agent import agent
+        reply = agent.process_message(cmd)
+        return jsonify({"ok": True, "reply": reply})
+    except Exception as e:
+        logger.exception("Error executing command: %s", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/gesture", methods=["POST"])
+def api_gesture():
+    """Handle touchless hand gesture commands (MediaPipe)."""
+    data = request.get_json(force=True, silent=True) or {}
+    gesture = str(data.get("gesture", "")).strip().lower()
+    from tool_definitions import execute_tool
+
+    if gesture in ("open_palm", "mute", "barge_in"):
+        try:
+            from voice_engine import voice
+            voice.barge_in()
+        except Exception:
+            pass
+        res = execute_tool("muteToggle", {})
+        return jsonify({"ok": True, "gesture": gesture, "action": "barge_in_and_mute", "result": res})
+
+    elif gesture in ("thumbs_up", "confirm", "proceed"):
+        res = execute_tool("confirmAndSendWhatsAppDraft", {})
+        return jsonify({"ok": True, "gesture": gesture, "action": "confirm_draft", "result": res})
+
+    elif gesture in ("pinch", "rotate", "spread", "zoom"):
+        return jsonify({"ok": True, "gesture": gesture, "action": "viewport_transform"})
+
+    elif gesture in ("next_track", "swipe_right"):
+        res = execute_tool("mediaControl", {"action": "next"})
+        return jsonify({"ok": True, "gesture": gesture, "action": "media_next", "result": res})
+
+    elif gesture in ("prev_track", "swipe_left"):
+        res = execute_tool("mediaControl", {"action": "previous"})
+        return jsonify({"ok": True, "gesture": gesture, "action": "media_prev", "result": res})
+
+    return jsonify({"ok": False, "error": f"Unknown gesture: {gesture}"}), 400
+
+
 from flask import Flask, jsonify, request, send_from_directory, Response, stream_with_context
 from neural_mesh_bridge import mesh_bridge
 

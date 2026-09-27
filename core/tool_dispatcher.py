@@ -1648,8 +1648,30 @@ async def dispatch_tool(name: str, args: dict, player, speak, loop) -> str:
             r = await loop.run_in_executor(None, lambda: highlight_text_on_screen(query))
             result = r or "Done."
 
+        elif name in (
+            "androidListDevices", "androidConnect", "androidBattery",
+            "androidUnlock", "androidLock", "androidOpenApp",
+            "androidNotifications", "androidMediaControl", "toggleStarkAudioFilter", "setStarkAudioFilter"
+        ):
+            from tool_definitions import execute_tool
+            res = await loop.run_in_executor(None, lambda: execute_tool(name, args))
+            if isinstance(res, dict):
+                result = res.get("result") or res.get("error") or str(res)
+            else:
+                result = str(res)
+
         else:
-            result = f"Unknown tool: {name}"
+            try:
+                from tool_definitions import execute_tool
+                res = await loop.run_in_executor(None, lambda: execute_tool(name, args))
+                if isinstance(res, dict) and res.get("ok"):
+                    result = res.get("result") or "Completed, Sir."
+                elif isinstance(res, dict) and not res.get("ok") and "not found" not in str(res.get("error", "")).lower():
+                    result = f"Execution result: {res.get('error')}"
+                else:
+                    result = f"Unknown tool: {name}"
+            except Exception:
+                result = f"Unknown tool: {name}"
 
     except Exception as e:
         result = f"Tool '{name}' failed: {e}"

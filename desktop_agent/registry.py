@@ -164,6 +164,15 @@ DESKTOP_TOOL_NAMES = [
     "listDrives",
     "manageProcess",
     "analyzeScreenWithAI",
+    # Android Automation (Ultron A Voice with Hands)
+    "androidListDevices",
+    "androidConnect",
+    "androidBattery",
+    "androidUnlock",
+    "androidLock",
+    "androidOpenApp",
+    "androidNotifications",
+    "androidMediaControl",
 ]
 
 
@@ -187,6 +196,7 @@ _MODULE_NAMES = [
     "tools_startup",
     "tools_gui",
     "tools_shell",
+    "tools_android",
 ]
 
 
@@ -199,3 +209,4 @@ def load_all() -> None:
 
 
 __all__ = ["TOOLS", "STATE", "DESKTOP_TOOL_NAMES", "ToolError", "register", "load_all"]
+

@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>PRIME AI — Autonomous Mobile Cockpit</title>
+  <!-- Three.js 3D Holographic Engine -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- MediaPipe Hands for Touchless Gestures -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600&display=swap');
 
@@ -343,9 +348,17 @@
     </div>
   </div>
 
+  <!-- Floating Touchless Gesture PIP HUD (MediaPipe) -->
+  <div id="gesturePip" style="display: none; position: fixed; top: 16px; right: 16px; width: 140px; height: 105px; border-radius: 10px; border: 1.5px solid var(--cyan); background: rgba(2,9,18,0.92); overflow: hidden; z-index: 100; box-shadow: 0 0 25px rgba(0,229,255,0.45);">
+    <video id="webcamVideo" playsinline autoplay muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+    <canvas id="gestureCanvas" style="position: absolute; top:0; left:0; width: 100%; height: 100%; transform: scaleX(-1);"></canvas>
+    <div id="gestureBadge" style="position: absolute; bottom: 3px; left: 3px; right: 3px; font-size: 8px; font-family: 'Orbitron'; background: rgba(0,0,0,0.8); color: var(--cyan); text-align: center; border-radius: 4px; padding: 2px 0; letter-spacing: 1px;">🖐️ HAND TRACKING</div>
+  </div>
+
   <!-- Orb -->
   <div class="orb-container">
     <div class="orb" id="orb" onclick="toggleVoiceInput()">
+      <canvas id="threeOrbCanvas" style="position: absolute; inset: -25px; width: calc(100% + 50px); height: calc(100% + 50px); border-radius: 50%; pointer-events: none; z-index: 2;"></canvas>
       <div class="orb-ring"></div>
       <div class="orb-ring-2"></div>
       <div class="orb-core"></div>
@@ -372,6 +385,8 @@
 
     <!-- Neural Mesh Cross-Device Quick Bar -->
     <div style="display: flex; gap: 6px; width: 100%; margin-bottom: 8px; justify-content: center; flex-wrap: wrap;">
+      <button id="btnGesture" onclick="toggleTouchlessGestures()" style="background: rgba(0,229,255,0.12); border: 1px solid var(--cyan); color: var(--cyan); padding: 6px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-family: 'Orbitron'; font-weight: 700;">🖐️ GESTURES</button>
+      <button onclick="triggerRemoteAction('phone_battery')" style="background: rgba(0,230,118,0.12); border: 1px solid rgba(0,230,118,0.3); color: var(--green); padding: 6px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-family: 'Orbitron'; font-weight: 700;">🔋 PHONE</button>
       <button onclick="syncClipboardToPC()" style="background: rgba(0,229,255,0.08); border: 1px solid var(--border); color: var(--cyan); padding: 6px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-family: 'Orbitron'; font-weight: 700;">📋 PUSH CLIP</button>
       <button onclick="pullClipboardFromPC()" style="background: rgba(0,229,255,0.08); border: 1px solid var(--border); color: var(--cyan); padding: 6px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-family: 'Orbitron'; font-weight: 700;">📥 GET PC CLIP</button>
       <button onclick="triggerRemoteAction('lock_pc')" style="background: rgba(255,23,68,0.12); border: 1px solid rgba(255,23,68,0.3); color: #ff5252; padding: 6px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-family: 'Orbitron'; font-weight: 700;">🔒 LOCK PC</button>
@@ -630,30 +645,353 @@
     }
   }
 
-  // SSE Live Notification and Clipboard Event Listener
-  function initMeshEvents() {
+  // ── Three.js Holographic Cockpit Orb ─────────────────────────────────────
+  let threeScene, threeCamera, threeRenderer;
+  let orbCoreMesh, orbWireMesh, orbRing1, orbRing2, particleCloud;
+  let orbBaseColor = 0x00e5ff;
+  let targetColor = 0x00e5ff;
+  let orbRotSpeed = 0.008;
+  let touchStartX = 0, touchStartY = 0, isDraggingOrb = false;
+
+  function initThreeOrb() {
+    const canvas = document.getElementById('threeOrbCanvas');
+    if (!canvas || typeof THREE === 'undefined') return;
+
+    const w = canvas.clientWidth || 240;
+    const h = canvas.clientHeight || 240;
+
+    threeScene = new THREE.Scene();
+    threeCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
+    threeCamera.position.z = 5.2;
+
+    threeRenderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    threeRenderer.setSize(w, h);
+    threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    // Inner Glowing Core
+    const coreGeo = new THREE.SphereGeometry(1.0, 32, 32);
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: orbBaseColor,
+      wireframe: false,
+      transparent: true,
+      opacity: 0.22,
+    });
+    orbCoreMesh = new THREE.Mesh(coreGeo, coreMat);
+    threeScene.add(orbCoreMesh);
+
+    // Geodesic Holographic Wireframe
+    const wireGeo = new THREE.IcosahedronGeometry(1.35, 2);
+    const wireMat = new THREE.MeshBasicMaterial({
+      color: orbBaseColor,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.55,
+    });
+    orbWireMesh = new THREE.Mesh(wireGeo, wireMat);
+    threeScene.add(orbWireMesh);
+
+    // Gimbal Ring 1
+    const ring1Geo = new THREE.TorusGeometry(1.8, 0.02, 8, 48);
+    const ring1Mat = new THREE.MeshBasicMaterial({ color: orbBaseColor, transparent: true, opacity: 0.4 });
+    orbRing1 = new THREE.Mesh(ring1Geo, ring1Mat);
+    threeScene.add(orbRing1);
+
+    // Gimbal Ring 2
+    const ring2Geo = new THREE.TorusGeometry(2.1, 0.015, 8, 48);
+    const ring2Mat = new THREE.MeshBasicMaterial({ color: 0x00b8d4, transparent: true, opacity: 0.3 });
+    orbRing2 = new THREE.Mesh(ring2Geo, ring2Mat);
+    orbRing2.rotation.x = Math.PI / 3;
+    threeScene.add(orbRing2);
+
+    // Ambient Particle Nebula
+    const partGeo = new THREE.BufferGeometry();
+    const partCount = 120;
+    const partPos = new Float32Array(partCount * 3);
+    for (let i = 0; i < partCount * 3; i += 3) {
+      const u = Math.random();
+      const v = Math.random();
+      const theta = u * 2.0 * Math.PI;
+      const phi = Math.acos(2.0 * v - 1.0);
+      const r = 2.4 + Math.random() * 0.8;
+      partPos[i] = r * Math.sin(phi) * Math.cos(theta);
+      partPos[i+1] = r * Math.sin(phi) * Math.sin(theta);
+      partPos[i+2] = r * Math.cos(phi);
+    }
+    partGeo.setAttribute('position', new THREE.BufferAttribute(partPos, 3));
+    const partMat = new THREE.PointsMaterial({ color: orbBaseColor, size: 0.05, transparent: true, opacity: 0.65 });
+    particleCloud = new THREE.Points(partGeo, partMat);
+    threeScene.add(particleCloud);
+
+    // Touch / Pointer controls on 3D Orb
+    const orbEl = document.getElementById('orb');
+    if (orbEl) {
+      orbEl.addEventListener('pointerdown', (e) => {
+        isDraggingOrb = true;
+        touchStartX = e.clientX;
+        touchStartY = e.clientY;
+      });
+      window.addEventListener('pointermove', (e) => {
+        if (!isDraggingOrb) return;
+        const dx = (e.clientX - touchStartX) * 0.008;
+        const dy = (e.clientY - touchStartY) * 0.008;
+        touchStartX = e.clientX;
+        touchStartY = e.clientY;
+        if (orbWireMesh) {
+          orbWireMesh.rotation.y += dx;
+          orbWireMesh.rotation.x += dy;
+        }
+      });
+      window.addEventListener('pointerup', () => { isDraggingOrb = false; });
+    }
+
+    animateThree();
+  }
+
+  function updateThreeStateColor(state) {
+    if (!orbCoreMesh || !orbWireMesh) return;
+    let hex = 0x00e5ff;
+    if (state === 'listening') hex = 0x00e676;
+    else if (state === 'thinking') hex = 0xffab00;
+    else if (state === 'speaking') hex = 0x7c4dff;
+    targetColor = hex;
+  }
+
+  function animateThree() {
+    requestAnimationFrame(animateThree);
+    if (!threeRenderer || !threeScene || !threeCamera) return;
+
+    // Smooth color interpolation
+    if (orbCoreMesh && orbWireMesh) {
+      orbCoreMesh.material.color.lerp(new THREE.Color(targetColor), 0.1);
+      orbWireMesh.material.color.lerp(new THREE.Color(targetColor), 0.1);
+      if (orbRing1) orbRing1.material.color.lerp(new THREE.Color(targetColor), 0.1);
+    }
+
+    // Rotations
+    if (orbWireMesh) {
+      orbWireMesh.rotation.y += orbRotSpeed;
+      orbWireMesh.rotation.x += orbRotSpeed * 0.5;
+    }
+    if (orbRing1) orbRing1.rotation.z += orbRotSpeed * 1.4;
+    if (orbRing2) {
+      orbRing2.rotation.y += orbRotSpeed * 0.8;
+      orbRing2.rotation.x += orbRotSpeed * 0.6;
+    }
+    if (particleCloud) {
+      particleCloud.rotation.y -= orbRotSpeed * 0.4;
+    }
+
+    threeRenderer.render(threeScene, threeCamera);
+  }
+
+  // Hook Three.js color changes into state transitions
+  const origSetVisualState = setVisualState;
+  setVisualState = function(state, text) {
+    origSetVisualState(state, text);
+    updateThreeStateColor(state);
+  };
+
+  // ── MediaPipe Webcam Touchless Hand Gestures ─────────────────────────────
+  let gesturesActive = false;
+  let gestureCamera = null;
+  let mpHands = null;
+  let lastGestureTime = 0;
+  let prevHandCenter = null;
+
+  async function toggleTouchlessGestures() {
+    const pip = document.getElementById('gesturePip');
+    const btn = document.getElementById('btnGesture');
+    const badge = document.getElementById('gestureBadge');
+
+    if (gesturesActive) {
+      // Deactivate
+      gesturesActive = false;
+      pip.style.display = 'none';
+      btn.style.background = 'rgba(0,229,255,0.12)';
+      btn.style.borderColor = 'var(--cyan)';
+      btn.textContent = '🖐️ GESTURES';
+      if (gestureCamera) {
+        try { gestureCamera.stop(); } catch(e) {}
+        gestureCamera = null;
+      }
+      appendLog('Gestures', 'Touchless hand gesture control disabled.');
+      return;
+    }
+
+    // Activate
     try {
-      const evtSource = new EventSource('/api/mesh/events');
-      evtSource.onmessage = (e) => {
-        try {
-          const ev = JSON.parse(e.data);
-          if (ev.type === 'notification') {
-            appendLog('⚡ ' + (ev.title || 'Notification'), ev.message || '');
-            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-          } else if (ev.type === 'clipboard_update') {
-            appendLog('📋 PC Copied', (ev.data || '').substring(0, 60) + '...');
+      appendLog('Gestures', 'Activating camera for touchless hand gestures...');
+      pip.style.display = 'block';
+      badge.textContent = 'INITIALIZING...';
+      btn.textContent = '🖐️ GESTURES ON';
+      btn.style.background = 'rgba(0,230,118,0.2)';
+      btn.style.borderColor = 'var(--green)';
+
+      const videoElement = document.getElementById('webcamVideo');
+      const canvasElement = document.getElementById('gestureCanvas');
+      const canvasCtx = canvasElement.getContext('2d');
+
+      if (!mpHands && typeof Hands !== 'undefined') {
+        mpHands = new Hands({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+        mpHands.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+
+        mpHands.onResults((results) => {
+          canvasCtx.save();
+          canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+          if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            const landmarks = results.multiHandLandmarks[0];
+            canvasElement.width = videoElement.videoWidth || 320;
+            canvasElement.height = videoElement.videoHeight || 240;
+
+            // Draw skeleton & landmarks
+            canvasCtx.strokeStyle = '#00e5ff';
+            canvasCtx.lineWidth = 2;
+            canvasCtx.fillStyle = '#00e676';
+            for (let pt of landmarks) {
+              const x = pt.x * canvasElement.width;
+              const y = pt.y * canvasElement.height;
+              canvasCtx.beginPath();
+              canvasCtx.arc(x, y, 3, 0, 2 * Math.PI);
+              canvasCtx.fill();
+            }
+
+            processHandGestures(landmarks, badge);
+          } else {
+            badge.textContent = 'SEARCHING HAND...';
+            prevHandCenter = null;
           }
-        } catch(err) {}
-      };
-      evtSource.onerror = () => {
-        // Will auto reconnect
-      };
-    } catch (e) {
-      console.warn('SSE not initialized:', e);
+          canvasCtx.restore();
+        });
+      }
+
+      if (typeof Camera !== 'undefined') {
+        gestureCamera = new Camera(videoElement, {
+          onFrame: async () => {
+            if (gesturesActive && mpHands) {
+              await mpHands.send({ image: videoElement });
+            }
+          },
+          width: 320,
+          height: 240
+        });
+        await gestureCamera.start();
+        gesturesActive = true;
+        badge.textContent = 'GESTURES ACTIVE';
+        appendLog('Gestures', 'Touchless hand gesture tracking online! Pinch to spin, Open Palm to Mute, Thumbs Up to Confirm.');
+      } else {
+        // Fallback standard getUserMedia
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240, facingMode: 'user' } });
+        videoElement.srcObject = stream;
+        videoElement.play();
+        gesturesActive = true;
+        badge.textContent = 'CAMERA ACTIVE';
+        appendLog('Gestures', 'Webcam stream online. Hand gesture tracking active.');
+      }
+    } catch (err) {
+      gesturesActive = false;
+      pip.style.display = 'none';
+      btn.textContent = '🖐️ GESTURES';
+      btn.style.background = 'rgba(0,229,255,0.12)';
+      btn.style.borderColor = 'var(--cyan)';
+      appendLog('Gesture Error', 'Camera access failed: ' + err.message, true);
     }
   }
 
-  window.addEventListener('load', initMeshEvents);
+  function processHandGestures(landmarks, badgeEl) {
+    const now = Date.now();
+    const thumbTip = landmarks[4];
+    const indexTip = landmarks[8];
+    const middleTip = landmarks[12];
+    const ringTip = landmarks[16];
+    const pinkyTip = landmarks[20];
+
+    const indexPip = landmarks[6];
+    const middlePip = landmarks[10];
+    const ringPip = landmarks[14];
+    const pinkyPip = landmarks[18];
+
+    // 1. PINCH DETECTION (Thumb tip + Index tip close)
+    const pinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+    if (pinchDist < 0.08) {
+      badgeEl.textContent = '👌 PINCH (SPIN 3D ORB)';
+      badgeEl.style.color = '#ffab00';
+      if (prevHandCenter) {
+        const dx = (thumbTip.x - prevHandCenter.x) * 12.0;
+        const dy = (thumbTip.y - prevHandCenter.y) * 12.0;
+        if (orbWireMesh) {
+          orbWireMesh.rotation.y += dx;
+          orbWireMesh.rotation.x += dy;
+        }
+      }
+      prevHandCenter = { x: thumbTip.x, y: thumbTip.y };
+      return;
+    } else {
+      prevHandCenter = null;
+    }
+
+    // Cooldown check for discrete trigger gestures (1.8 seconds)
+    if (now - lastGestureTime < 1800) return;
+
+    // 2. OPEN PALM (All 4 fingers extended well above PIP joints)
+    const isOpenPalm =
+      indexTip.y < indexPip.y - 0.05 &&
+      middleTip.y < middlePip.y - 0.05 &&
+      ringTip.y < ringPip.y - 0.05 &&
+      pinkyTip.y < pinkyPip.y - 0.05;
+
+    if (isOpenPalm) {
+      lastGestureTime = now;
+      badgeEl.textContent = '🖐️ OPEN PALM [MUTING]';
+      badgeEl.style.color = '#ff1744';
+      appendLog('Gesture', '🖐️ Open Palm detected: Barge-in & Muting...');
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      stopVoice();
+      fetch('/api/gesture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gesture: 'open_palm' })
+      }).catch(e => console.warn(e));
+      return;
+    }
+
+    // 3. THUMBS UP (Thumb pointing up, other 4 fingers curled down)
+    const isThumbsUp =
+      thumbTip.y < landmarks[2].y - 0.08 &&
+      indexTip.y > indexPip.y &&
+      middleTip.y > middlePip.y &&
+      ringTip.y > ringPip.y &&
+      pinkyTip.y > pinkyPip.y;
+
+    if (isThumbsUp) {
+      lastGestureTime = now;
+      badgeEl.textContent = '👍 THUMBS UP [CONFIRM]';
+      badgeEl.style.color = '#00e676';
+      appendLog('Gesture', '👍 Thumbs Up detected: Confirming pending action/draft...');
+      fetch('/api/gesture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gesture: 'thumbs_up' })
+      }).catch(e => console.warn(e));
+      return;
+    }
+
+    badgeEl.textContent = 'GESTURES READY';
+    badgeEl.style.color = 'var(--cyan)';
+  }
+
+  // Initialize Three.js Orb on window load
+  window.addEventListener('load', () => {
+    initMeshEvents();
+    initThreeOrb();
+  });
 </script>
 </body>
 </html>

@@ -1675,6 +1675,88 @@ def _handle_run_autonomous_code_repair(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"runAutonomousCodeRepair error: {e}"}
 
 
+def _handle_android_list_devices(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.android_manager import android_manager
+        return android_manager.list_devices()
+    except Exception as e:
+        return {"ok": False, "error": f"androidListDevices error: {e}"}
+
+
+def _handle_android_connect(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.android_manager import android_manager
+        host = args.get("host") or args.get("ip") or ""
+        port = int(args.get("port") or 5555)
+        return android_manager.connect_device(host, port)
+    except Exception as e:
+        return {"ok": False, "error": f"androidConnect error: {e}"}
+
+
+def _handle_android_battery(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.android_manager import android_manager
+        return android_manager.get_battery_status()
+    except Exception as e:
+        return {"ok": False, "error": f"androidBattery error: {e}"}
+
+
+def _handle_android_unlock(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.android_manager import android_manager
+        return android_manager.wake_and_unlock()
+    except Exception as e:
+        return {"ok": False, "error": f"androidUnlock error: {e}"}
+
+
+def _handle_android_lock(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.android_manager import android_manager
+        return android_manager.lock_screen()
+    except Exception as e:
+        return {"ok": False, "error": f"androidLock error: {e}"}
+
+
+def _handle_android_open_app(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.android_manager import android_manager
+        app_name = args.get("app_name") or args.get("name") or ""
+        return android_manager.open_app(app_name)
+    except Exception as e:
+        return {"ok": False, "error": f"androidOpenApp error: {e}"}
+
+
+def _handle_android_notifications(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.android_manager import android_manager
+        limit = int(args.get("limit") or 5)
+        return android_manager.read_notifications(limit=limit)
+    except Exception as e:
+        return {"ok": False, "error": f"androidNotifications error: {e}"}
+
+
+def _handle_android_media_control(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.android_manager import android_manager
+        act = args.get("action") or "play_pause"
+        return android_manager.media_control(act)
+    except Exception as e:
+        return {"ok": False, "error": f"androidMediaControl error: {e}"}
+
+
+def _handle_toggle_stark_filter(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from voice_engine import voice
+        en = bool(args.get("enabled", True))
+        intensity = float(args.get("intensity") or 0.65)
+        voice.set_stark_filter(en, intensity)
+        status = "ENABLED" if en else "DISABLED"
+        return {"ok": True, "message": f"Stark Intercom Audio Filter {status} (intensity={intensity:.2f})."}
+    except Exception as e:
+        return {"ok": False, "error": f"toggleStarkAudioFilter error: {e}"}
+
+
+
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
     "getTime": _handle_time,
@@ -1755,6 +1837,18 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "setPowerProfile": _handle_set_power_profile,
     "extractVideoFrames": _handle_extract_video_frames,
     "openWhatsAppChat": _handle_open_whatsapp_chat,
+    # Android Automation (Ultron A Voice with Hands)
+    "androidListDevices": _handle_android_list_devices,
+    "androidConnect": _handle_android_connect,
+    "androidBattery": _handle_android_battery,
+    "androidUnlock": _handle_android_unlock,
+    "androidLock": _handle_android_lock,
+    "androidOpenApp": _handle_android_open_app,
+    "androidNotifications": _handle_android_notifications,
+    "androidMediaControl": _handle_android_media_control,
+    # Stark Intercom Audio DSP Filter
+    "toggleStarkAudioFilter": _handle_toggle_stark_filter,
+    "setStarkAudioFilter": _handle_toggle_stark_filter,
 }
 
 

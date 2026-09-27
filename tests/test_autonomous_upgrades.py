@@ -169,5 +169,129 @@ class TestVoiceEngineLowLatency(unittest.TestCase):
         self.assertIn("WhatsApp watcher is active.", calls[2])
 
 
+class TestStarkIntercomAudioDSP(unittest.TestCase):
+    """Feature 6: Cinematic Intercom / Stark Radio Audio DSP Filter Tests."""
+
+    def test_stark_filter_toggle_and_intensity(self):
+        from voice_engine import voice
+        orig_state = voice.stark_filter_enabled
+        orig_intensity = voice.stark_filter_intensity
+        try:
+            res = voice.set_stark_filter(True, 0.85)
+            self.assertTrue(voice.stark_filter_enabled)
+            self.assertAlmostEqual(voice.stark_filter_intensity, 0.85)
+            self.assertTrue(res)
+
+            res_off = voice.set_stark_filter(False)
+            self.assertFalse(voice.stark_filter_enabled)
+            self.assertFalse(res_off)
+        finally:
+            voice.stark_filter_enabled = orig_state
+            voice.stark_filter_intensity = orig_intensity
+
+    def test_stark_filter_dsp_pipeline(self):
+        import numpy as np
+        from voice_engine import apply_stark_intercom_filter
+
+        sample_rate = 24000
+        # 0.5s of test tone (440 Hz sine wave)
+        t = np.linspace(0, 0.5, int(sample_rate * 0.5), endpoint=False)
+        mono_signal = (np.sin(2 * np.pi * 440 * t) * 0.8).astype(np.float32)
+
+        filtered = apply_stark_intercom_filter(mono_signal, sample_rate, intensity=0.7)
+        self.assertEqual(filtered.shape, mono_signal.shape)
+        self.assertFalse(np.isnan(filtered).any())
+        self.assertFalse(np.isinf(filtered).any())
+        # Soft saturation should keep bounds within [-1.0, 1.0]
+        self.assertTrue(np.all(filtered >= -1.05))
+        self.assertTrue(np.all(filtered <= 1.05))
+
+    def test_stark_filter_tool_execution(self):
+        res = tool_definitions.execute_tool("toggleStarkAudioFilter", {"enabled": True, "intensity": 0.75})
+        self.assertTrue(res.get("ok"))
+        self.assertIn("Stark Intercom Audio Filter", res.get("message"))
+
+
+class TestWirelessAndroidADBControl(unittest.TestCase):
+    """Feature 4: Wireless Android ADB Control Tests."""
+
+    def test_android_manager_init(self):
+        from actions.android_manager import AndroidManager
+        mgr = AndroidManager()
+        self.assertIsNotNone(mgr)
+        self.assertEqual(mgr.default_port, 5555)
+
+    @patch("actions.android_manager.subprocess.run")
+    def test_list_devices(self, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="List of devices attached\n192.168.1.50:5555\tdevice\nemulator-5554\tdevice\n"
+        )
+        from actions.android_manager import android_manager
+        devices = android_manager.list_devices()
+        self.assertTrue(devices.get("ok"))
+        serials = [d["serial"] for d in devices.get("devices", [])]
+        self.assertIn("192.168.1.50:5555", serials)
+        self.assertIn("emulator-5554", serials)
+
+    @patch("actions.android_manager.subprocess.run")
+    def test_get_battery_status(self, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="Current Battery Service state:\n  level: 85\n  status: 2\n  temperature: 300\n"
+        )
+        from actions.android_manager import android_manager
+        status = android_manager.get_battery_status()
+        self.assertTrue(status.get("ok"))
+        self.assertEqual(status.get("level"), 85)
+        self.assertEqual(status.get("status"), "Charging")
+
+    @patch("actions.android_manager.subprocess.run")
+    def test_wake_and_unlock(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        from actions.android_manager import android_manager
+        res = android_manager.wake_and_unlock()
+        self.assertTrue(res.get("ok"))
+        self.assertIn("dismissed lock screen", res.get("message").lower())
+
+    def test_android_tool_definitions_dispatch(self):
+        with patch("actions.android_manager.AndroidManager.get_battery_status", return_value={"ok": True, "level": 92}):
+            res = tool_definitions.execute_tool("androidBattery", {})
+            self.assertTrue(res.get("ok"))
+            self.assertEqual(res.get("level"), 92)
+
+
+class TestMobileRoomGestureEndpoint(unittest.TestCase):
+    """Feature 3: MediaPipe Gesture and Mobile Cockpit Endpoints."""
+
+    def setUp(self):
+        from mobile_room_server import app
+        app.config["TESTING"] = True
+        self.client = app.test_client()
+
+    def test_gesture_open_palm_mute(self):
+        resp = self.client.post("/api/gesture", json={"gesture": "open_palm"})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data.get("ok"))
+        self.assertEqual(data.get("action"), "barge_in_and_mute")
+
+    def test_gesture_thumbs_up_confirm(self):
+        resp = self.client.post("/api/gesture", json={"gesture": "thumbs_up"})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data.get("ok"))
+        self.assertEqual(data.get("action"), "confirm_draft")
+
+    def test_api_command_execution(self):
+        with patch("ai_agent.AIAgent.process_message", return_value="Command executed successfully, Sir."):
+            resp = self.client.post("/api/command", json={"command": "system status"})
+            self.assertEqual(resp.status_code, 200)
+            data = resp.get_json()
+            self.assertTrue(data.get("ok"))
+            self.assertIn("Command executed", data.get("reply"))
+
+
 if __name__ == "__main__":
     unittest.main()
+

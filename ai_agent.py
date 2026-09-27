@@ -699,6 +699,73 @@ class AIAgent:
                     voice.speak(out)
                 return out
 
+        # 2g. Wireless Android Fast-Path (Ultron A Voice with Hands)
+        if any(k in lower for k in ("phone battery", "mobile battery", "battery on phone", "phone ki battery")):
+            res = execute_tool("androidBattery", {})
+            out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, "Fetched phone battery.")
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        if any(k in lower for k in ("unlock phone", "phone unlock", "phone ko unlock karo", "wake phone")):
+            res = execute_tool("androidUnlock", {})
+            out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, "Phone unlocked.")
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        if any(k in lower for k in ("lock phone", "phone lock", "phone screen off", "phone ko lock karo")):
+            res = execute_tool("androidLock", {})
+            out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, "Phone locked.")
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        m_phone_app = (
+            re.search(r'(?:open|launch)\s+([a-zA-Z0-9\s]+?)\s+(?:on|in)\s+(?:the\s+)?(?:phone|mobile)', lower)
+            or re.search(r'phone\s+(?:pe|par|me|mein)\s+([a-zA-Z0-9\s]+?)\s+(?:open|kholo|chalao)', lower)
+            or re.search(r'(?:phone|mobile)\s+(?:open|launch)\s+([a-zA-Z0-9\s]+)', lower)
+        )
+        if m_phone_app:
+            app_target = m_phone_app.group(1).strip()
+            res = execute_tool("androidOpenApp", {"app_name": app_target})
+            out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, f"Opening {app_target} on phone.")
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        if any(k in lower for k in ("phone notification", "phone notifications", "check phone notifications", "mobile notifications")):
+            res = execute_tool("androidNotifications", {})
+            out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, "Checked phone notifications.")
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        m_phone_media = re.search(r'phone\s+(?:media\s+)?(play|pause|next|previous|stop|volume_up|volume_down)', lower)
+        if m_phone_media:
+            action = m_phone_media.group(1).strip()
+            res = execute_tool("androidMediaControl", {"action": action})
+            out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, f"Phone media: {action}.")
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        if any(k in lower for k in ("connected phones", "phone devices", "list phones", "adb devices")):
+            res = execute_tool("androidListDevices", {})
+            out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, "Listed devices.")
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
+        # 2h. Stark Intercom Audio DSP Filter Fast-Path
+        if any(k in lower for k in ("stark filter", "intercom filter", "iron man voice", "radio filter", "dsp filter")):
+            enable = not any(k in lower for k in ("off", "disable", "band", "deactivate"))
+            res = execute_tool("toggleStarkAudioFilter", {"enabled": enable})
+            out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, f"Stark audio filter {'enabled' if enable else 'disabled'}.")
+            if voice.tts_enabled:
+                voice.speak(out)
+            return out
+
         # 3. Open applications or websites
         m_app = (
             re.match(r"(?:open|launch|start|kholo|chalao)\s+(?:the\s+)?(?:app\s+)?([a-zA-Z0-9\s\.\-_]+)", lower)

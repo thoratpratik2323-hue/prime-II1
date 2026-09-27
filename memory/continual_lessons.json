@@ -146,5 +146,40 @@
     "topic": "Tool Failure: cancelScheduledWhatsAppCall",
     "insight": "Command 'Rohit ki scheduled call cancel kar do' failed with args {}. Ensure parameters and fallback routing are validated.",
     "source": "trace_reflection_loop"
+  },
+  {
+    "id": 22,
+    "timestamp": "2026-09-26T14:46:54.599254",
+    "topic": "Tool Failure: sendWhatsAppMessage",
+    "insight": "Command 'can you just message your hello kaisi ho theek ho' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
+  },
+  {
+    "id": 23,
+    "timestamp": "2026-09-26T14:47:50.879668",
+    "topic": "Tool Failure: sendWhatsAppMessage",
+    "insight": "Command 'is already' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
+  },
+  {
+    "id": 24,
+    "timestamp": "2026-09-26T15:13:30.048062",
+    "topic": "Tool Failure: takeScreenshot",
+    "insight": "Command 'tune mere shirt ko kya socha' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
+  },
+  {
+    "id": 25,
+    "timestamp": "2026-09-26T15:32:19.345974",
+    "topic": "Tool Failure: sendWhatsAppMessage",
+    "insight": "Command 'open bhagwat dande' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
+  },
+  {
+    "id": 26,
+    "timestamp": "2026-09-26T19:29:33.047011",
+    "topic": "Tool Failure: sendWhatsAppMessage",
+    "insight": "Command 'send message to young hello' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
   }
 ]
