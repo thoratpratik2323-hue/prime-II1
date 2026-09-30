@@ -1112,6 +1112,70 @@ TOOL_SPECS: List[Dict[str, Any]] = [
             },
             "required": ["enabled"]
         }
+    },
+    # OpenGTM Intelligence & Outbound Suite
+    {
+        "name": "enrichLead",
+        "description": "Run an OpenGTM-inspired cascading waterfall enrichment on a company or domain (local cache -> meta intel -> web search -> API adapters) to extract company details, tech stack, leadership, and contacts.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "Company domain or website URL (e.g. 'stripe.com', 'linear.app', or company name)."},
+                "force_refresh": {"type": "boolean", "description": "Bypass local cache and force fresh waterfall scrape."}
+            },
+            "required": ["domain"]
+        }
+    },
+    {
+        "name": "scanBuyingSignals",
+        "description": "Scan a company for high-intent buying signals (hiring roles on careers page, recent funding rounds, tech stack modernization) and calculate an account intent score.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "Target company domain or name (e.g. 'supabase.com', 'postman.com')."}
+            },
+            "required": ["domain"]
+        }
+    },
+    {
+        "name": "draftGTMOutreach",
+        "description": "Draft a hyper-personalized outreach message for WhatsApp, Email, or LinkedIn using enriched lead data, verified buying signals, and custom conversation hooks.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string", "description": "Company domain or name."},
+                "channel": {"type": "string", "description": "Outreach channel: 'whatsapp', 'email', or 'linkedin' (default: 'whatsapp')."},
+                "contact_name": {"type": "string", "description": "Target recipient name or founder name."},
+                "value_proposition": {"type": "string", "description": "Custom value proposition or service offering to mention in the pitch."}
+            },
+            "required": ["domain"]
+        }
+    },
+    {
+        "name": "queueGTMWhatsAppOutreach",
+        "description": "Generate a tailored GTM outreach pitch and either stage it as a WhatsApp draft for review or send it immediately to a contact/phone number.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "recipient": {"type": "string", "description": "Recipient name (saved contact) or international phone number."},
+                "domain": {"type": "string", "description": "Company domain or website of the lead."},
+                "send_now": {"type": "boolean", "description": "If true, dispatches immediately via WhatsApp. If false (default), stages draft for confirmation."},
+                "custom_note": {"type": "string", "description": "Custom angle or service offering to pitch."}
+            },
+            "required": ["recipient", "domain"]
+        }
+    },
+    {
+        "name": "connectOpenGTM",
+        "description": "Interface with a self-hosted OpenGTM server instance (Docker/FastAPI) to check health, list workbooks, or enqueue background waterfall jobs.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "'health' (check connection), 'workbooks' (list workbooks), or 'enqueue' (enqueue lead job)."},
+                "domain": {"type": "string", "description": "Domain to enqueue if action='enqueue'."}
+            },
+            "required": []
+        }
     }
 ]
 
@@ -1897,6 +1961,59 @@ def _handle_toggle_vocal_isolation(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"toggleVocalNoiseIsolation error: {e}"}
 
 
+def _handle_enrich_lead(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.gtm_waterfall import enrich_company_lead
+        domain = args.get("domain") or args.get("company") or args.get("website") or ""
+        force = bool(args.get("force_refresh", False))
+        return enrich_company_lead(domain, force_refresh=force)
+    except Exception as e:
+        return {"ok": False, "error": f"enrichLead error: {e}"}
+
+
+def _handle_scan_signals(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.gtm_signals import scan_account_signals
+        domain = args.get("domain") or args.get("company") or args.get("website") or ""
+        return scan_account_signals(domain)
+    except Exception as e:
+        return {"ok": False, "error": f"scanBuyingSignals error: {e}"}
+
+
+def _handle_draft_gtm_outreach(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.gtm_outreach import draft_gtm_outreach
+        domain = args.get("domain") or args.get("company") or ""
+        channel = args.get("channel") or "whatsapp"
+        contact = args.get("contact_name") or args.get("contact") or args.get("recipient") or ""
+        value_prop = args.get("value_proposition") or args.get("pitch") or ""
+        return draft_gtm_outreach(domain, channel=channel, target_contact_name=contact, value_proposition=value_prop)
+    except Exception as e:
+        return {"ok": False, "error": f"draftGTMOutreach error: {e}"}
+
+
+def _handle_queue_gtm_whatsapp(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.gtm_outreach import queue_whatsapp_gtm_pitch
+        recipient = args.get("recipient") or args.get("contact") or args.get("to") or ""
+        domain = args.get("domain") or args.get("company") or ""
+        send_now = bool(args.get("send_now", False))
+        custom_note = args.get("custom_note") or args.get("value_proposition") or ""
+        return queue_whatsapp_gtm_pitch(recipient, domain, send_now=send_now, custom_note=custom_note)
+    except Exception as e:
+        return {"ok": False, "error": f"queueGTMWhatsAppOutreach error: {e}"}
+
+
+def _handle_connect_opengtm(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.opengtm_connector import connect_opengtm
+        action = args.get("action") or "health"
+        domain = args.get("domain") or ""
+        return connect_opengtm(action=action, domain=domain)
+    except Exception as e:
+        return {"ok": False, "error": f"connectOpenGTM error: {e}"}
+
+
 
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
@@ -2001,6 +2118,12 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     # Vocal Isolation & Noise Suppression
     "toggleVocalNoiseIsolation": _handle_toggle_vocal_isolation,
     "setVocalIsolation": _handle_toggle_vocal_isolation,
+    # OpenGTM Intelligence & Outbound Suite
+    "enrichLead": _handle_enrich_lead,
+    "scanBuyingSignals": _handle_scan_signals,
+    "draftGTMOutreach": _handle_draft_gtm_outreach,
+    "queueGTMWhatsAppOutreach": _handle_queue_gtm_whatsapp,
+    "connectOpenGTM": _handle_connect_opengtm,
 }
 
 
@@ -2050,6 +2173,10 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         'writeObsidianNote': [('name', 'title'), ('text', 'content'), ('body', 'content')],
         'readObsidianNote': [('name', 'title')],
         'quickNote': [('title', 'note'), ('text', 'note'), ('content', 'note')],
+        'enrichLead': [('company', 'domain'), ('website', 'domain'), ('url', 'domain')],
+        'scanBuyingSignals': [('company', 'domain'), ('website', 'domain'), ('url', 'domain')],
+        'draftGTMOutreach': [('company', 'domain'), ('website', 'domain'), ('recipient', 'contact_name'), ('to', 'contact_name')],
+        'queueGTMWhatsAppOutreach': [('to', 'recipient'), ('contact', 'recipient'), ('phone', 'recipient'), ('company', 'domain')],
     }
     for src, dst in arg_mappings.get(name, []):
         if src in args and dst not in args:

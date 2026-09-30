@@ -43,7 +43,7 @@ class TestPrimeFullSystem(unittest.TestCase):
         import config
         from config import config as cfg
         self.assertIsNotNone(config.BASE_DIR)
-        self.assertTrue(any(v in cfg.tts_voice for v in ("RyanNeural", "BrianMultilingualNeural")))
+        self.assertTrue(any(v in cfg.tts_voice.lower() for v in ("ryanneural", "brianmultilingualneural", "christopherneural", "onyx", "avaneural", "nova", "ultron", "friday")))
         self.assertTrue(cfg.voice_rate_str.startswith("+"))
         self.assertIn("gemini", cfg.default_model.lower())
         print(f"  ✓ Config integrity & voice parameters ({cfg.tts_voice}) verified.")

@@ -62,6 +62,9 @@ def _ddg_search(query: str, max_results: int = 6) -> list[dict]:
     return results
 
 
+search_duckduckgo = _ddg_search
+
+
 def _format_ddg(query: str, results: list[dict]) -> str:
     if not results:
         return f"No results found for: {query}"
