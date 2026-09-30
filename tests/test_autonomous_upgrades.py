@@ -319,6 +319,141 @@ class TestMobileRoomGestureEndpoint(unittest.TestCase):
             self.assertIn("Command executed", data.get("reply"))
 
 
+class TestVocalIsolationDSP(unittest.TestCase):
+    """VoiceStudio Feature 4: Vocal Isolation & Noise Suppression DSP Tests."""
+
+    def test_vocal_isolation_state_toggle(self):
+        import actions.vocal_isolation as vi
+        orig = vi.get_vocal_isolation_state()
+        try:
+            res_on = vi.set_vocal_isolation_state(True, 0.85)
+            self.assertTrue(res_on.get("ok"))
+            self.assertTrue(res_on.get("enabled"))
+            self.assertAlmostEqual(res_on.get("sensitivity"), 0.85)
+
+            res_off = vi.set_vocal_isolation_state(False)
+            self.assertFalse(res_off.get("enabled"))
+        finally:
+            vi.set_vocal_isolation_state(orig.get("enabled", True), orig.get("sensitivity", 0.75))
+
+    def test_vocal_isolation_filtering(self):
+        import numpy as np
+        from actions.vocal_isolation import apply_vocal_isolation
+
+        sr = 16000
+        t = np.linspace(0, 0.4, int(sr * 0.4), endpoint=False)
+        # Low rumble (40Hz fan) + Speech tone (1000Hz) + High hiss (8000Hz)
+        signal = (np.sin(2 * np.pi * 40 * t) * 0.3 + np.sin(2 * np.pi * 1000 * t) * 0.6 + np.sin(2 * np.pi * 8000 * t) * 0.2).astype(np.float32)
+
+        isolated = apply_vocal_isolation(signal, sample_rate=sr, sensitivity=0.8)
+        self.assertEqual(isolated.shape, signal.shape)
+        self.assertFalse(np.isnan(isolated).any())
+        self.assertFalse(np.isinf(isolated).any())
+
+    def test_vocal_isolation_tool_dispatch(self):
+        res = tool_definitions.execute_tool("toggleVocalNoiseIsolation", {"enabled": True, "sensitivity": 0.8})
+        self.assertTrue(res.get("ok"))
+        self.assertIn("Vocal Isolation", res.get("message"))
+
+
+class TestSystemWideDictation(unittest.TestCase):
+    """VoiceStudio Feature 3: System-Wide Dictation & Native App Typing Tests."""
+
+    def test_dictation_status(self):
+        from actions.dictation_manager import get_dictation_status
+        status = get_dictation_status()
+        self.assertTrue(status.get("ok"))
+        self.assertIn("is_active", status)
+        self.assertIn("active_window", status)
+
+    @patch("actions.dictation_manager._simulate_paste")
+    @patch("pyperclip.copy")
+    @patch("pyperclip.paste", return_value="original_clipboard_data")
+    def test_insert_text_clipboard_preservation(self, mock_paste, mock_copy, mock_sim):
+        from actions.dictation_manager import insert_text_into_active_window
+        res = insert_text_into_active_window("Hello World from Prime Dictation", restore_clipboard=True)
+        self.assertTrue(res.get("ok"))
+        self.assertEqual(res.get("characters_inserted"), len("Hello World from Prime Dictation"))
+        mock_sim.assert_called_once()
+        # Should have copied new text, then restored original clipboard data
+        mock_copy.assert_any_call("Hello World from Prime Dictation")
+        mock_copy.assert_any_call("original_clipboard_data")
+
+    def test_dictate_tool_dispatch(self):
+        with patch("actions.dictation_manager.insert_text_into_active_window", return_value={"ok": True, "target_window": "Test App", "message": "Success"}):
+            res = tool_definitions.execute_tool("dictateToActiveWindow", {"text": "Unit Test Dictation"})
+            self.assertTrue(res.get("ok"))
+            self.assertEqual(res.get("target_window"), "Test App")
+
+
+class TestVoiceStudioAndCloning(unittest.TestCase):
+    """VoiceStudio Features 1 & 2: Local Voice Cloning, Voice Design, and Engine Adapter Tests."""
+
+    def test_list_voice_profiles(self):
+        from actions.voice_studio_manager import list_voice_profiles
+        profiles = list_voice_profiles()
+        self.assertTrue(profiles.get("ok"))
+        self.assertIn("local_profiles", profiles)
+        profile_ids = [p["id"] for p in profiles.get("local_profiles", [])]
+        self.assertIn("ultron", profile_ids)
+        self.assertIn("friday", profile_ids)
+
+    def test_design_voice_persona(self):
+        from actions.voice_studio_manager import design_voice
+        res = design_voice("Deep resonant British butler with calm cadence", "Alfred")
+        self.assertTrue(res.get("ok"))
+        self.assertEqual(res.get("name"), "Alfred")
+        self.assertEqual(res.get("profile_id"), "designed_alfred")
+        attrs = res.get("attributes", {})
+        self.assertEqual(attrs.get("gender"), "male")
+        self.assertEqual(attrs.get("pitch"), "low")
+        self.assertEqual(attrs.get("accent"), "en-GB")
+
+    def test_clone_voice_from_reference_file(self):
+        import wave
+        from pathlib import Path
+        from actions.voice_studio_manager import clone_voice
+
+        # Generate a small dummy reference WAV file
+        test_wav = Path("tests/test_ref_voice.wav")
+        try:
+            with wave.open(str(test_wav), "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(16000)
+                # 0.2s of 440Hz tone
+                import numpy as np
+                t = np.linspace(0, 0.2, int(16000 * 0.2), endpoint=False)
+                tone = (np.sin(2 * np.pi * 440 * t) * 30000).astype(np.int16)
+                wf.writeframes(tone.tobytes())
+
+            res = clone_voice(str(test_wav), "Tony Stark")
+            self.assertTrue(res.get("ok"))
+            self.assertEqual(res.get("name"), "Tony Stark")
+            self.assertEqual(res.get("profile_id"), "cloned_tony_stark")
+        finally:
+            if test_wav.exists():
+                test_wav.unlink()
+            cleaned = Path("tests/test_ref_voice_cleaned.wav")
+            if cleaned.exists():
+                cleaned.unlink()
+
+    def test_voicestudio_tool_dispatch(self):
+        res_list = tool_definitions.execute_tool("listVoiceProfiles", {})
+        self.assertTrue(res_list.get("ok"))
+
+        res_design = tool_definitions.execute_tool("designVoicePersona", {
+            "description": "Warm cheerful female assistant",
+            "profile_name": "Sunny"
+        })
+        self.assertTrue(res_design.get("ok"))
+        self.assertEqual(res_design.get("name"), "Sunny")
+
+        res_set = tool_definitions.execute_tool("setVoiceProfile", {"profile_id": "ultron"})
+        self.assertTrue(res_set.get("ok"))
+
+
 if __name__ == "__main__":
     unittest.main()
+
 

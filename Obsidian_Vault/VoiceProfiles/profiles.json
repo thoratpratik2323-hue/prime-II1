@@ -1,0 +1,63 @@
+{
+  "version": "1.0",
+  "profiles": {
+    "ultron": {
+      "id": "ultron",
+      "name": "Ultron (Sagar Tamang Baritone)",
+      "type": "preset",
+      "description": "Deep commanding metallic baritone with Stark Intercom DSP filter",
+      "filter_enabled": true,
+      "filter_intensity": 0.75
+    },
+    "friday": {
+      "id": "friday",
+      "name": "F.R.I.D.A.Y. (Sagar Tamang Nova)",
+      "type": "preset",
+      "description": "Clear natural female AI assistant",
+      "filter_enabled": false
+    },
+    "charon": {
+      "id": "charon",
+      "name": "Mark-LIV Charon",
+      "type": "preset",
+      "description": "Authoritative deep Gemini neural voice",
+      "filter_enabled": true,
+      "filter_intensity": 0.65
+    },
+    "cloned_tony_stark": {
+      "id": "cloned_tony_stark",
+      "name": "Tony Stark",
+      "type": "cloned",
+      "sample_path": "tests\\test_ref_voice_cleaned.wav",
+      "language": "en",
+      "remote_profile_id": null,
+      "created_at": "1790784647.1689208"
+    },
+    "designed_alfred": {
+      "id": "designed_alfred",
+      "name": "Alfred",
+      "type": "designed",
+      "description": "Deep resonant British butler with calm cadence",
+      "attributes": {
+        "gender": "male",
+        "pitch": "low",
+        "accent": "en-GB",
+        "style": "natural"
+      },
+      "remote_profile_id": null
+    },
+    "designed_sunny": {
+      "id": "designed_sunny",
+      "name": "Sunny",
+      "type": "designed",
+      "description": "Warm cheerful female assistant",
+      "attributes": {
+        "gender": "female",
+        "pitch": "normal",
+        "accent": "en-US",
+        "style": "natural"
+      },
+      "remote_profile_id": null
+    }
+  }
+}

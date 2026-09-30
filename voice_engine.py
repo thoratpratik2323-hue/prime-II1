@@ -241,6 +241,7 @@ class VoiceEngine:
     def get_available_voices(self) -> Dict[str, List[str]]:
         return {
             "sagar_ultron_friday": ["ultron", "friday", "nova", "onyx"],
+            "voicestudio": ["voicestudio", "omnivoice", "cloned_profiles"],
             "openai": list(OPENAI_TTS_VOICES.values()),
             "mark_liv_gemini": list(MARK_LIV_GEMINI_VOICES.values()),
             "edge_neural": list(EDGE_NEURAL_VOICES.values()),
@@ -291,7 +292,12 @@ class VoiceEngine:
                         if getattr(config, "openai_api_key", None) or os.getenv("OPENAI_API_KEY"):
                             played = self._speak_openai_tts(text, openai_voice)
 
-                    # 3. If not Gemini/OpenAI or if they failed, try Edge-TTS Neural voice (Zero-credential fallback!)
+                    # 3. Check VoiceStudio Local TTS (OmniVoice / Cloned voices / port 3900)
+                    use_voicestudio = getattr(config, "tts_engine", "") == "voicestudio" or curr_lower.startswith(("cloned_", "designed_"))
+                    if not played and use_voicestudio:
+                        played = self._speak_voicestudio_tts(text, curr)
+
+                    # 4. If not Gemini/OpenAI/VoiceStudio, try Edge-TTS Neural voice (Zero-credential fallback!)
                     if not played and curr_lower != "david":
                         if "ryan" in curr_lower or "en-gb" in curr_lower:
                             edge_voice = "hi-IN-MadhurNeural" if re.search(r"[\u0900-\u097f]", text) else "en-GB-RyanNeural"
@@ -305,7 +311,7 @@ class VoiceEngine:
                             edge_voice = EDGE_NEURAL_VOICES.get(curr_lower, curr if 'neural' in curr_lower else 'en-US-ChristopherNeural' if curr_lower in ('ultron', 'onyx') else 'en-GB-RyanNeural')
                         played = loop.run_until_complete(self._speak_edge_tts(text, edge_voice))
 
-                    # 4. Final Fallback: Offline pyttsx3 (Microsoft David)
+                    # 5. Final Fallback: Offline pyttsx3 (Microsoft David)
                     if not played:
                         self._speak_pyttsx3_male(text)
 
@@ -515,6 +521,34 @@ class VoiceEngine:
         except Exception as e:
             log.warning("OpenAI TTS speech failed: %s", e)
             return False
+
+    def _speak_voicestudio_tts(self, text: str, voice_or_profile_id: str = "ultron") -> bool:
+        """Synthesize speech using debpalash/VoiceStudio local HTTP endpoint (port 3900)."""
+        host = os.getenv("VOICESTUDIO_HOST", "http://127.0.0.1:3900").rstrip("/")
+        url = f"{host}/v1/audio/speech"
+        try:
+            import json
+            import urllib.request
+            payload = {
+                "input": text,
+                "voice": voice_or_profile_id,
+                "model": "omnivoice",
+                "response_format": "mp3",
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10.0) as resp:
+                content = resp.read()
+                if content:
+                    buf = io.BytesIO(content)
+                    return self._play_audio_stream(buf)
+        except Exception as e:
+            log.debug("VoiceStudio local TTS speech failed: %s", e)
+        return False
 
     async def _speak_edge_tts(self, text: str, voice_name: str = "en-US-ChristopherNeural") -> bool:
         """Synthesize with Edge-TTS neural voice and play with Stark Intercom Filter in-memory."""

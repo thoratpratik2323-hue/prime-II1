@@ -1031,6 +1031,88 @@ TOOL_SPECS: List[Dict[str, Any]] = [
             "required": ["video_path"]
         }
     },
+    # Cinematic Stark Intercom Audio DSP Filter
+    {
+        "name": "toggleStarkAudioFilter",
+        "description": "Enable, disable, or adjust intensity of the cinematic Stark Intercom / Ultron acoustic DSP filter.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "enabled": {"type": "boolean", "description": "Enable (true) or disable (false) the Stark audio filter."},
+                "intensity": {"type": "number", "description": "Filter intensity from 0.0 to 1.0 (default: 0.75 for Ultron, 0.65 for JARVIS)."}
+            },
+            "required": ["enabled"]
+        }
+    },
+    # VoiceStudio Local Voice Cloning & Voice Design
+    {
+        "name": "cloneVoice",
+        "description": "Clone any voice from an audio reference file (.wav or .mp3) using local VoiceStudio (OmniVoice) with automatic vocal isolation and noise suppression.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "sample_path": {"type": "string", "description": "Path to the clean voice audio reference file (.wav, .mp3)."},
+                "profile_name": {"type": "string", "description": "Name for the cloned voice profile (e.g. 'Tony Stark', 'Morgan Freeman', 'My Voice')."},
+                "language": {"type": "string", "description": "Primary language of the sample (default: 'en')."},
+                "clean_sample": {"type": "boolean", "description": "Whether to apply vocal isolation noise cleaning to reference audio before cloning (default: true)."}
+            },
+            "required": ["sample_path", "profile_name"]
+        }
+    },
+    {
+        "name": "designVoicePersona",
+        "description": "Design a custom voice persona from a descriptive prompt (e.g. 'Deep resonant British male butler with calm cadence and subtle rasp').",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "description": {"type": "string", "description": "Descriptive prompt detailing pitch, accent, gender, style, and tone."},
+                "profile_name": {"type": "string", "description": "Name for the new voice persona."}
+            },
+            "required": ["description", "profile_name"]
+        }
+    },
+    {
+        "name": "listVoiceProfiles",
+        "description": "List all voice profiles: built-in presets (Ultron, Friday, Ryan, Charon), designed personas, and cloned voices.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "setVoiceProfile",
+        "description": "Switch Prime's active speech voice to a specific voice preset or cloned/designed profile ID.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "profile_id": {"type": "string", "description": "Voice profile name or ID (e.g. 'ultron', 'friday', 'charon', 'cloned_tony_stark')."}
+            },
+            "required": ["profile_id"]
+        }
+    },
+    # System-Wide Native Dictation
+    {
+        "name": "dictateToActiveWindow",
+        "description": "Type text directly into whichever application window is currently active/focused on Windows (VS Code, WhatsApp, Chrome, Notepad, Word). Preserves original clipboard content.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "The text to insert into the currently focused window."},
+                "append_newline": {"type": "boolean", "description": "Whether to press Enter after inserting the text."}
+            },
+            "required": ["text"]
+        }
+    },
+    # Vocal Isolation & Noise Suppression Pre-Processing
+    {
+        "name": "toggleVocalNoiseIsolation",
+        "description": "Toggle or tune real-time vocal isolation DSP filter that strips ambient background noise (fan, AC hum, music) from audio.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "enabled": {"type": "boolean", "description": "Enable or disable vocal noise isolation."},
+                "sensitivity": {"type": "number", "description": "Sensitivity from 0.1 to 1.0 (default: 0.75)."}
+            },
+            "required": ["enabled"]
+        }
+    }
 ]
 
 
@@ -1756,6 +1838,65 @@ def _handle_toggle_stark_filter(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"toggleStarkAudioFilter error: {e}"}
 
 
+def _handle_clone_voice(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.voice_studio_manager import clone_voice
+        sample_path = args.get("sample_path") or args.get("audio_path") or ""
+        profile_name = args.get("profile_name") or args.get("name") or "Custom Cloned Voice"
+        language = args.get("language") or "en"
+        clean = bool(args.get("clean_sample", True))
+        return clone_voice(sample_path, profile_name, language=language, clean_sample=clean)
+    except Exception as e:
+        return {"ok": False, "error": f"cloneVoice error: {e}"}
+
+
+def _handle_design_voice(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.voice_studio_manager import design_voice
+        description = args.get("description") or args.get("prompt") or ""
+        profile_name = args.get("profile_name") or args.get("name") or "Designed Voice"
+        return design_voice(description, profile_name)
+    except Exception as e:
+        return {"ok": False, "error": f"designVoicePersona error: {e}"}
+
+
+def _handle_list_voice_profiles(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.voice_studio_manager import list_voice_profiles
+        return list_voice_profiles()
+    except Exception as e:
+        return {"ok": False, "error": f"listVoiceProfiles error: {e}"}
+
+
+def _handle_set_voice_profile(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.voice_studio_manager import set_active_voice_profile
+        profile_id = args.get("profile_id") or args.get("voice") or args.get("name") or ""
+        return set_active_voice_profile(profile_id)
+    except Exception as e:
+        return {"ok": False, "error": f"setVoiceProfile error: {e}"}
+
+
+def _handle_dictate_to_window(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.dictation_manager import insert_text_into_active_window
+        text = args.get("text") or ""
+        newline = bool(args.get("append_newline", False))
+        return insert_text_into_active_window(text, append_newline=newline)
+    except Exception as e:
+        return {"ok": False, "error": f"dictateToActiveWindow error: {e}"}
+
+
+def _handle_toggle_vocal_isolation(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.vocal_isolation import set_vocal_isolation_state
+        enabled = bool(args.get("enabled", True))
+        sensitivity = float(args.get("sensitivity") or 0.75)
+        return set_vocal_isolation_state(enabled, sensitivity)
+    except Exception as e:
+        return {"ok": False, "error": f"toggleVocalNoiseIsolation error: {e}"}
+
+
 
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
@@ -1849,6 +1990,17 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     # Stark Intercom Audio DSP Filter
     "toggleStarkAudioFilter": _handle_toggle_stark_filter,
     "setStarkAudioFilter": _handle_toggle_stark_filter,
+    # VoiceStudio Local Voice Cloning & Voice Design
+    "cloneVoice": _handle_clone_voice,
+    "designVoicePersona": _handle_design_voice,
+    "listVoiceProfiles": _handle_list_voice_profiles,
+    "setVoiceProfile": _handle_set_voice_profile,
+    # System-Wide Native Dictation
+    "dictateToActiveWindow": _handle_dictate_to_window,
+    "dictateText": _handle_dictate_to_window,
+    # Vocal Isolation & Noise Suppression
+    "toggleVocalNoiseIsolation": _handle_toggle_vocal_isolation,
+    "setVocalIsolation": _handle_toggle_vocal_isolation,
 }
 
 
