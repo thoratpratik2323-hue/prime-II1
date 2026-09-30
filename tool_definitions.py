@@ -1239,6 +1239,65 @@ TOOL_SPECS: List[Dict[str, Any]] = [
         "name": "generateOS1Briefing",
         "description": "Generate an autonomous proactive conversational briefing combining hardware vitals, Git changes, WhatsApp unread messages, and Obsidian memory.",
         "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    # Opal Universal Media & Streaming Suite
+    {
+        "name": "searchUniversalMedia",
+        "description": "Search across Live IPTV channels, YouTube, and local media files (Videos/Music folders) from a single query.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query, channel name, or media title."}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "playMediaStream",
+        "description": "Play a media stream, live IPTV channel, YouTube video, or local media file using native Opal, VLC, mpv, or system player.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "stream_url": {"type": "string", "description": "Stream URL, channel ID, file path, or natural media query."},
+                "title": {"type": "string", "description": "Optional title for display/history."},
+                "player_preference": {"type": "string", "description": "'auto', 'opal', 'vlc', or 'mpv'."}
+            },
+            "required": ["stream_url"]
+        }
+    },
+    {
+        "name": "listIPTVChannels",
+        "description": "List curated 24/7 Live IPTV channels and web radio stations across News, Music, Tech, and Ambient categories.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "description": "Optional category filter: 'News', 'Music', 'Tech', 'Ambient'."},
+                "query": {"type": "string", "description": "Optional text search."}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "aiMediaCopilot",
+        "description": "Use the private on-device AI Copilot to match natural language vibes/moods (e.g. 'coding synthwave', 'chill lofi beats', 'movies like Interstellar') to curated media streams.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "Mood, vibe, or media recommendation prompt."}
+            },
+            "required": ["prompt"]
+        }
+    },
+    {
+        "name": "getMediaPlaybackHistory",
+        "description": "Retrieve recent watch and stream playback history from the local media ledger.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Maximum number of recent entries to return (default: 20)."}
+            },
+            "required": []
+        }
     }
 ]
 
@@ -2141,6 +2200,54 @@ def _handle_generate_os1_briefing(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"generateOS1Briefing error: {e}"}
 
 
+def _handle_search_universal_media(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.opal_media_hub import search_universal_media
+        query = args.get("query") or args.get("q") or ""
+        return search_universal_media(query)
+    except Exception as e:
+        return {"ok": False, "error": f"searchUniversalMedia error: {e}"}
+
+
+def _handle_play_media_stream(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.opal_media_hub import play_universal_media
+        target = args.get("stream_url") or args.get("url") or args.get("query") or ""
+        title = args.get("title") or ""
+        pref = args.get("player_preference") or "auto"
+        return play_universal_media(target, title=title, player_preference=pref)
+    except Exception as e:
+        return {"ok": False, "error": f"playMediaStream error: {e}"}
+
+
+def _handle_list_iptv_channels(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.opal_iptv import list_iptv_channels
+        cat = args.get("category") or ""
+        query = args.get("query") or ""
+        return list_iptv_channels(category=cat, query=query)
+    except Exception as e:
+        return {"ok": False, "error": f"listIPTVChannels error: {e}"}
+
+
+def _handle_ai_media_copilot(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.opal_ai_copilot import match_mood_media
+        prompt = args.get("prompt") or args.get("vibe") or args.get("query") or ""
+        return match_mood_media(prompt)
+    except Exception as e:
+        return {"ok": False, "error": f"aiMediaCopilot error: {e}"}
+
+
+def _handle_get_media_history(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.opal_media_hub import get_media_playback_history
+        limit = int(args.get("limit") or 20)
+        return get_media_playback_history(limit=limit)
+    except Exception as e:
+        return {"ok": False, "error": f"getMediaPlaybackHistory error: {e}"}
+
+
 
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
@@ -2259,6 +2366,12 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getHERVisualizerState": _handle_get_her_visualizer_state,
     "sanitizePromptPrivacy": _handle_sanitize_prompt_privacy,
     "generateOS1Briefing": _handle_generate_os1_briefing,
+    # Opal Universal Media Suite
+    "searchUniversalMedia": _handle_search_universal_media,
+    "playMediaStream": _handle_play_media_stream,
+    "listIPTVChannels": _handle_list_iptv_channels,
+    "aiMediaCopilot": _handle_ai_media_copilot,
+    "getMediaPlaybackHistory": _handle_get_media_history,
 }
 
 
@@ -2315,6 +2428,9 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         'generateOS1Fragment': [('type', 'fragment_type'), ('widget', 'fragment_type'), ('data', 'custom_data')],
         'dismissOS1Fragment': [('id', 'fragment_id'), ('type', 'fragment_id')],
         'sanitizePromptPrivacy': [('prompt', 'text'), ('content', 'text')],
+        'searchUniversalMedia': [('q', 'query'), ('search', 'query'), ('term', 'query')],
+        'playMediaStream': [('url', 'stream_url'), ('stream', 'stream_url'), ('target', 'stream_url'), ('query', 'stream_url')],
+        'aiMediaCopilot': [('vibe', 'prompt'), ('mood', 'prompt'), ('query', 'prompt')],
     }
     for src, dst in arg_mappings.get(name, []):
         if src in args and dst not in args:
