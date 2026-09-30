@@ -1,0 +1,34 @@
+{
+  "ver_d683fca82e3e": {
+    "job_id": "ver_d683fca82e3e",
+    "task_id": "test_task_tool",
+    "delivery_id": "del_tool_1",
+    "commit_sha": "HEAD",
+    "all_passed": true,
+    "results": [
+      {
+        "command": "mock:pass",
+        "passed": true,
+        "output": "Tests passed: 100% assertions satisfied"
+      }
+    ],
+    "verified_at": 1790794013.1648865,
+    "status": "PASSED"
+  },
+  "ver_62fe3b824971": {
+    "job_id": "ver_62fe3b824971",
+    "task_id": "test_task_tool",
+    "delivery_id": "del_tool_1",
+    "commit_sha": "HEAD",
+    "all_passed": true,
+    "results": [
+      {
+        "command": "mock:pass",
+        "passed": true,
+        "output": "Tests passed: 100% assertions satisfied"
+      }
+    ],
+    "verified_at": 1790794025.078981,
+    "status": "PASSED"
+  }
+}

@@ -1398,6 +1398,128 @@ TOOL_SPECS: List[Dict[str, Any]] = [
         "name": "getActiveTaskPlan",
         "description": "Retrieve the current in-progress durable task plan that survived restarts.",
         "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    # Collagent / AgentWork Decentralized Labor Protocol
+    {
+        "name": "createProblemCharter",
+        "description": "Post a funded ProblemSpec v1 charter with bounty, scope, governance, and acceptance criteria.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Title of the problem to solve."},
+                "charter": {"type": "string", "description": "Detailed charter, background, and objective."},
+                "acceptance_criteria": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of clear acceptance conditions."
+                },
+                "bounty_usdc": {"type": "number", "description": "Bounty allocated in USDC."},
+                "scope": {"type": "string", "description": "Scope (e.g. GLOBAL, LOCAL)."},
+                "risk_level": {"type": "string", "description": "LOW, MEDIUM, or HIGH."},
+                "license_type": {"type": "string", "description": "e.g. MIT, Apache-2.0, CC-BY-4.0."}
+            },
+            "required": ["title", "charter", "acceptance_criteria"]
+        }
+    },
+    {
+        "name": "decomposeProblemDAG",
+        "description": "Decompose a problem into a DAG of parallel workstreams with cycle detection and bounty allocation.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "problem_id": {"type": "string", "description": "Problem charter ID."},
+                "workstreams": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "List of workstream objects with key, title, bounty_share_pct, dependencies."
+                }
+            },
+            "required": ["problem_id", "workstreams"]
+        }
+    },
+    {
+        "name": "registerWorkArtifact",
+        "description": "Register a content-digested artifact with cryptographic SHA-256 provenance in the evidence ledger.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "problem_id": {"type": "string", "description": "Problem charter ID."},
+                "workstream_key": {"type": "string", "description": "Workstream key this artifact satisfies."},
+                "title": {"type": "string", "description": "Artifact title."},
+                "artifact_content_or_uri": {"type": "string", "description": "Code content or URI to hash and register."},
+                "artifact_type": {"type": "string", "description": "CODE, ANALYSIS, DATASET, REPLICATION, BENCHMARK."},
+                "license_type": {"type": "string", "description": "License under which artifact is released."}
+            },
+            "required": ["problem_id", "workstream_key", "title", "artifact_content_or_uri"]
+        }
+    },
+    {
+        "name": "scanLaborMarketplace",
+        "description": "Scan open tasks/bounties and evaluate capability feasibility matching against Prime's specialized agent skills.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "required_skills": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of skills required for the task (e.g. python, solidity, backend)."
+                },
+                "max_budget_usdc": {"type": "number", "description": "Max budget available in USDC."}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "placeLaborBid",
+        "description": "Submit an identity-bound worker bid for an open task with USDC amount, stake commitment, and estimated hours.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task or problem ID."},
+                "bid_amount_usdc": {"type": "number", "description": "Requested reward in USDC."},
+                "stake_amount_usdc": {"type": "number", "description": "Crypto stake committed."},
+                "estimated_hours": {"type": "number", "description": "Estimated hours to delivery."},
+                "proposal_pitch": {"type": "string", "description": "Technical proposal and approach."}
+            },
+            "required": ["task_id", "bid_amount_usdc", "proposal_pitch"]
+        }
+    },
+    {
+        "name": "verifyLaborDelivery",
+        "description": "Run isolated sandbox verification tests on delivered Git commits/artifacts and record verifier quorum votes.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task ID being verified."},
+                "delivery_id": {"type": "string", "description": "Delivery ID being verified."},
+                "test_commands": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of test commands to execute in sandbox."
+                },
+                "commit_sha": {"type": "string", "description": "Git commit SHA."},
+                "record_vote": {"type": "string", "description": "Optional verifier vote: 'APPROVE' or 'REJECT'."}
+            },
+            "required": ["task_id", "delivery_id", "test_commands"]
+        }
+    },
+    {
+        "name": "settleTaskEscrow",
+        "description": "Trigger on-chain Base L2 escrow settlement to release USDC to the worker upon verifier quorum approval.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task ID."},
+                "recipient_address": {"type": "string", "description": "Worker payout address."},
+                "override_signoff": {"type": "boolean", "description": "True if employer manually signs off."}
+            },
+            "required": ["task_id", "recipient_address"]
+        }
+    },
+    {
+        "name": "getCollagentStatus",
+        "description": "Get overall Collagent protocol status, API/EVM connectivity, active problem charters, and escrow totals.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
     }
 ]
 
@@ -2437,6 +2559,131 @@ def _handle_get_active_task_plan(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"getActiveTaskPlan error: {e}"}
 
 
+def _handle_create_problem_charter(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.agentwork_charter import ProblemCharterManager
+        mgr = ProblemCharterManager()
+        title = args.get("title") or ""
+        charter = args.get("charter") or ""
+        crit = args.get("acceptance_criteria") or []
+        bounty = float(args.get("bounty_usdc") or 0.0)
+        scope = args.get("scope") or "GLOBAL"
+        risk = args.get("risk_level") or "LOW"
+        lic = args.get("license_type") or "MIT"
+        return mgr.create_problem_charter(title, charter, crit, bounty_usdc=bounty, scope=scope, risk_level=risk, license_type=lic)
+    except Exception as e:
+        return {"ok": False, "error": f"createProblemCharter error: {e}"}
+
+
+def _handle_decompose_problem_dag(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.agentwork_charter import ProblemCharterManager
+        mgr = ProblemCharterManager()
+        pid = args.get("problem_id") or ""
+        ws = args.get("workstreams") or []
+        return mgr.decompose_into_workstream_dag(pid, ws)
+    except Exception as e:
+        return {"ok": False, "error": f"decomposeProblemDAG error: {e}"}
+
+
+def _handle_register_work_artifact(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.agentwork_charter import ProblemCharterManager
+        mgr = ProblemCharterManager()
+        pid = args.get("problem_id") or ""
+        ws_key = args.get("workstream_key") or ""
+        title = args.get("title") or ""
+        content = args.get("artifact_content_or_uri") or ""
+        atype = args.get("artifact_type") or "CODE"
+        lic = args.get("license_type") or "MIT"
+        return mgr.register_artifact(pid, ws_key, title, content, artifact_type=atype, license_type=lic)
+    except Exception as e:
+        return {"ok": False, "error": f"registerWorkArtifact error: {e}"}
+
+
+def _handle_scan_labor_marketplace(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.agentwork_worker import AgentWorkerEngine
+        engine = AgentWorkerEngine()
+        skills = args.get("required_skills") or ["python", "api", "testing"]
+        budget = float(args.get("max_budget_usdc") or 100.0)
+        return engine.evaluate_task_feasibility(skills, budget)
+    except Exception as e:
+        return {"ok": False, "error": f"scanLaborMarketplace error: {e}"}
+
+
+def _handle_place_labor_bid(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.agentwork_worker import AgentWorkerEngine
+        engine = AgentWorkerEngine()
+        task_id = args.get("task_id") or ""
+        bid_amount = float(args.get("bid_amount_usdc") or 50.0)
+        stake = float(args.get("stake_amount_usdc") or 5.0)
+        hours = float(args.get("estimated_hours") or 4.0)
+        pitch = args.get("proposal_pitch") or "Prime Autonomous Agent ready to execute."
+        return engine.place_labor_bid(task_id, bid_amount, stake, hours, pitch)
+    except Exception as e:
+        return {"ok": False, "error": f"placeLaborBid error: {e}"}
+
+
+def _handle_verify_labor_delivery(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.agentwork_verifier import SandboxVerifierEngine
+        verifier = SandboxVerifierEngine()
+        task_id = args.get("task_id") or ""
+        del_id = args.get("delivery_id") or ""
+        cmds = args.get("test_commands") or ["mock:pass"]
+        sha = args.get("commit_sha")
+        res = verifier.run_sandbox_verification(task_id, del_id, cmds, commit_sha=sha)
+
+        vote = args.get("record_vote")
+        if vote:
+            vote_res = verifier.record_quorum_vote(task_id, res.get("verification", {}).get("job_id", ""), "Prime-Verifier-Node", vote)
+            res["quorum_vote"] = vote_res
+        return res
+    except Exception as e:
+        return {"ok": False, "error": f"verifyLaborDelivery error: {e}"}
+
+
+def _handle_settle_task_escrow(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.agentwork_connector import CollagentConnector
+        from actions.agentwork_verifier import SandboxVerifierEngine
+        conn = CollagentConnector()
+        v_engine = SandboxVerifierEngine()
+
+        task_id = args.get("task_id") or ""
+        recipient = args.get("recipient_address") or ""
+        override = bool(args.get("override_signoff", False))
+
+        q_status = v_engine.get_quorum_status(task_id)
+        consensus = q_status.get("consensus_status") if q_status else None
+
+        return conn.settle_escrow(task_id, recipient, verifier_consensus=consensus, override_signoff=override)
+    except Exception as e:
+        return {"ok": False, "error": f"settleTaskEscrow error: {e}"}
+
+
+def _handle_get_collagent_status(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.agentwork_connector import CollagentConnector
+        from actions.agentwork_charter import ProblemCharterManager
+        conn = CollagentConnector()
+        mgr = ProblemCharterManager()
+        health = conn.check_platform_health()
+        escrow = conn.get_escrow_summary()
+        charters = mgr.list_charters()
+        return {
+            "status": "success",
+            "health": health,
+            "escrow_summary": escrow,
+            "open_problems_count": len(charters),
+            "problems": charters,
+        }
+    except Exception as e:
+        return {"ok": False, "error": f"getCollagentStatus error: {e}"}
+
+
 
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
@@ -2571,6 +2818,15 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "createDurableTaskPlan": _handle_create_durable_task_plan,
     "updateTaskPlanStep": _handle_update_task_plan_step,
     "getActiveTaskPlan": _handle_get_active_task_plan,
+    # Collagent / AgentWork Decentralized Labor Protocol
+    "createProblemCharter": _handle_create_problem_charter,
+    "decomposeProblemDAG": _handle_decompose_problem_dag,
+    "registerWorkArtifact": _handle_register_work_artifact,
+    "scanLaborMarketplace": _handle_scan_labor_marketplace,
+    "placeLaborBid": _handle_place_labor_bid,
+    "verifyLaborDelivery": _handle_verify_labor_delivery,
+    "settleTaskEscrow": _handle_settle_task_escrow,
+    "getCollagentStatus": _handle_get_collagent_status,
 }
 
 
@@ -2634,6 +2890,12 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         'forgetUserPreference': [('name', 'key')],
         'recallPreferences': [('q', 'query'), ('search', 'query')],
         'createDurableTaskPlan': [('objective', 'goal'), ('tasks', 'steps')],
+        'createProblemCharter': [('bounty', 'bounty_usdc'), ('criteria', 'acceptance_criteria')],
+        'decomposeProblemDAG': [('id', 'problem_id'), ('dag', 'workstreams')],
+        'registerWorkArtifact': [('content', 'artifact_content_or_uri'), ('uri', 'artifact_content_or_uri'), ('workstream', 'workstream_key')],
+        'placeLaborBid': [('pitch', 'proposal_pitch'), ('bid', 'bid_amount_usdc'), ('amount', 'bid_amount_usdc'), ('stake', 'stake_amount_usdc')],
+        'verifyLaborDelivery': [('commands', 'test_commands'), ('vote', 'record_vote')],
+        'settleTaskEscrow': [('recipient', 'recipient_address'), ('to', 'recipient_address')],
     }
     for src, dst in arg_mappings.get(name, []):
         if src in args and dst not in args:

@@ -1,0 +1,16 @@
+{
+  "test_task_tool": {
+    "task_id": "test_task_tool",
+    "job_id": "ver_d683fca82e3e",
+    "votes": {
+      "Prime-Verifier-Node": {
+        "vote": "APPROVE",
+        "confidence": 0.95,
+        "review_notes": "Verified in isolated sandbox test suite.",
+        "timestamp": 1790794025.0806613
+      }
+    },
+    "consensus_reached": false,
+    "consensus_status": "PENDING_MORE_VOTES"
+  }
+}

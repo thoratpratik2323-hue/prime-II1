@@ -116,3 +116,14 @@
   4. actions/friday_tasks.py: Restart-safe, state-persisted durable multi-step task planner surviving process restarts.
   5. Registered 9 new tools (undoLastAction, listExecutionReceipts, rememberUserPreference, recallPreferences, forgetUserPreference, checkActionPolicy, createDurableTaskPlan, updateTaskPlanStep, getActiveTaskPlan) bringing Prime's total active tools to 135 with 11/11 suite tests and 77/77 full system regression tests passing.
 
+
+### [2026-10-01 00:17:00] AgentWork / Collagent Decentralized AI Agent Labor Protocol
+- **Decision**: Integrated AgentWork / Collagent architecture (debpalash/agentwork) into Prime AI
+- **Details**: Built 4 core modules:
+  1. actions/agentwork_charter.py: ProblemSpec v1 charters, algorithmic DAG workstream decomposition, and SHA-256 content-digested artifact evidence ledger.
+  2. actions/agentwork_worker.py: Autonomous worker engine with capability feasibility matching (Prime's 279 specialized agents), identity-bound bidding with stake, and Git commit delivery packaging.
+  3. actions/agentwork_verifier.py: Isolated sandbox verification runner and multi-agent independent verifier quorum voting consensus.
+  4. actions/agentwork_connector.py: API / EVM RPC connector (Base L2 USDC escrow) with automated verifier-gated settlement and refund mechanics.
+  5. Registered 8 new tools (createProblemCharter, decomposeProblemDAG, registerWorkArtifact, scanLaborMarketplace, placeLaborBid, verifyLaborDelivery, settleTaskEscrow, getCollagentStatus) bringing Prime's total active tools to 143 with 8/8 suite tests and 85/85 full system regression tests passing.
+
+
