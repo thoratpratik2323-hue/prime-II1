@@ -1176,6 +1176,69 @@ TOOL_SPECS: List[Dict[str, Any]] = [
             },
             "required": []
         }
+    },
+    # OS 1 Conversational Operating System Suite
+    {
+        "name": "generateOS1Fragment",
+        "description": "Generate an ephemeral, purpose-built UI fragment micro-widget ('disk_cleaner', 'git_card', 'media_controller', 'system_status', 'lead_card') that appears when needed and fades when done.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "fragment_type": {"type": "string", "description": "Type of fragment: 'disk_cleaner', 'git_card', 'media_controller', 'system_status', or 'lead_card'."},
+                "custom_data": {"type": "object", "description": "Optional payload data for the fragment."}
+            },
+            "required": ["fragment_type"]
+        }
+    },
+    {
+        "name": "dismissOS1Fragment",
+        "description": "Dismiss an active ephemeral UI fragment by its ID, or dismiss 'all' active fragments.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "fragment_id": {"type": "string", "description": "Fragment ID (e.g. 'frag_1234abcd') or 'all'."}
+            },
+            "required": ["fragment_id"]
+        }
+    },
+    {
+        "name": "listActiveFragments",
+        "description": "List all active ephemeral UI fragments currently rendered on screen.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "setHERCompanionMode",
+        "description": "Enable or tune HER (Samantha) warm companion persona and breathing coral visualizer aesthetic.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "enabled": {"type": "boolean", "description": "Enable or disable HER companion mode."},
+                "warmth_level": {"type": "string", "description": "'subtle', 'balanced', or 'warm'."},
+                "palette": {"type": "string", "description": "'coral' or 'amber'."}
+            },
+            "required": ["enabled"]
+        }
+    },
+    {
+        "name": "getHERVisualizerState",
+        "description": "Query the real-time mathematical state, scale, opacity, and glow of the breathing coral ring visualizer.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "sanitizePromptPrivacy",
+        "description": "Scan and redact sensitive PII, API keys, passwords, and payment credentials using the local on-device privacy shield.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Text or prompt content to sanitize."}
+            },
+            "required": ["text"]
+        }
+    },
+    {
+        "name": "generateOS1Briefing",
+        "description": "Generate an autonomous proactive conversational briefing combining hardware vitals, Git changes, WhatsApp unread messages, and Obsidian memory.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
     }
 ]
 
@@ -2014,6 +2077,70 @@ def _handle_connect_opengtm(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"connectOpenGTM error: {e}"}
 
 
+def _handle_generate_os1_fragment(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.os1_fragments import generate_fragment
+        ftype = args.get("fragment_type") or args.get("type") or "system_status"
+        custom_data = args.get("custom_data")
+        return generate_fragment(ftype, custom_data=custom_data)
+    except Exception as e:
+        return {"ok": False, "error": f"generateOS1Fragment error: {e}"}
+
+
+def _handle_dismiss_os1_fragment(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.os1_fragments import dismiss_fragment
+        fid = args.get("fragment_id") or args.get("id") or "all"
+        return dismiss_fragment(fid)
+    except Exception as e:
+        return {"ok": False, "error": f"dismissOS1Fragment error: {e}"}
+
+
+def _handle_list_active_fragments(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.os1_fragments import list_active_fragments
+        return list_active_fragments()
+    except Exception as e:
+        return {"ok": False, "error": f"listActiveFragments error: {e}"}
+
+
+def _handle_set_her_companion_mode(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.her_companion import set_her_companion_mode
+        en = bool(args.get("enabled", True))
+        warmth = args.get("warmth_level") or "warm"
+        palette = args.get("palette") or "coral"
+        return set_her_companion_mode(en, warmth_level=warmth, palette=palette)
+    except Exception as e:
+        return {"ok": False, "error": f"setHERCompanionMode error: {e}"}
+
+
+def _handle_get_her_visualizer_state(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.her_companion import get_her_visualizer_state
+        offset = float(args.get("t_offset")) if "t_offset" in args else None
+        return get_her_visualizer_state(t_offset=offset)
+    except Exception as e:
+        return {"ok": False, "error": f"getHERVisualizerState error: {e}"}
+
+
+def _handle_sanitize_prompt_privacy(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.os1_privacy_guard import sanitize_text
+        text = args.get("text") or ""
+        return sanitize_text(text)
+    except Exception as e:
+        return {"ok": False, "error": f"sanitizePromptPrivacy error: {e}"}
+
+
+def _handle_generate_os1_briefing(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.os1_briefing import generate_os1_briefing
+        return generate_os1_briefing()
+    except Exception as e:
+        return {"ok": False, "error": f"generateOS1Briefing error: {e}"}
+
+
 
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
@@ -2124,6 +2251,14 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "draftGTMOutreach": _handle_draft_gtm_outreach,
     "queueGTMWhatsAppOutreach": _handle_queue_gtm_whatsapp,
     "connectOpenGTM": _handle_connect_opengtm,
+    # OS 1 Conversational Operating System Suite
+    "generateOS1Fragment": _handle_generate_os1_fragment,
+    "dismissOS1Fragment": _handle_dismiss_os1_fragment,
+    "listActiveFragments": _handle_list_active_fragments,
+    "setHERCompanionMode": _handle_set_her_companion_mode,
+    "getHERVisualizerState": _handle_get_her_visualizer_state,
+    "sanitizePromptPrivacy": _handle_sanitize_prompt_privacy,
+    "generateOS1Briefing": _handle_generate_os1_briefing,
 }
 
 
@@ -2177,6 +2312,9 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         'scanBuyingSignals': [('company', 'domain'), ('website', 'domain'), ('url', 'domain')],
         'draftGTMOutreach': [('company', 'domain'), ('website', 'domain'), ('recipient', 'contact_name'), ('to', 'contact_name')],
         'queueGTMWhatsAppOutreach': [('to', 'recipient'), ('contact', 'recipient'), ('phone', 'recipient'), ('company', 'domain')],
+        'generateOS1Fragment': [('type', 'fragment_type'), ('widget', 'fragment_type'), ('data', 'custom_data')],
+        'dismissOS1Fragment': [('id', 'fragment_id'), ('type', 'fragment_id')],
+        'sanitizePromptPrivacy': [('prompt', 'text'), ('content', 'text')],
     }
     for src, dst in arg_mappings.get(name, []):
         if src in args and dst not in args:
