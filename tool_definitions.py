@@ -1298,6 +1298,106 @@ TOOL_SPECS: List[Dict[str, Any]] = [
             },
             "required": []
         }
+    },
+    # Friday Assistant Architecture Suite
+    {
+        "name": "undoLastAction",
+        "description": "Roll back the most recent state-changing action (file creation, modification, or configuration) using its recorded execution receipt snapshot.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "listExecutionReceipts",
+        "description": "View recent execution receipts tracking state-changing actions, pre-states, and rollback availability.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "Number of recent receipts to inspect (default: 15)."}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "rememberUserPreference",
+        "description": "Explicitly store a user preference, working guideline, fact, or correction that persists across sessions.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "key": {"type": "string", "description": "Memory key (e.g. 'units', 'theme', 'editor', 'coding_style')."},
+                "value": {"type": "string", "description": "The preference value to remember."},
+                "category": {"type": "string", "description": "'preferences', 'facts', 'rules', or 'corrections'."}
+            },
+            "required": ["key", "value"]
+        }
+    },
+    {
+        "name": "recallPreferences",
+        "description": "Search or list active user preferences, working guidelines, and stored facts.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Optional search filter."},
+                "category": {"type": "string", "description": "Optional category filter."}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "forgetUserPreference",
+        "description": "Explicitly delete a stored preference or memory key from the user ledger.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "key": {"type": "string", "description": "Memory key to delete."}
+            },
+            "required": ["key"]
+        }
+    },
+    {
+        "name": "checkActionPolicy",
+        "description": "Evaluate an intended action against safety boundaries to determine risk tier (SAFE, SENSITIVE, HIGH_RISK) and gate destructive commands.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "tool_name": {"type": "string", "description": "Name of the tool to evaluate."},
+                "params": {"type": "object", "description": "Arguments to pass to the tool."}
+            },
+            "required": ["tool_name"]
+        }
+    },
+    {
+        "name": "createDurableTaskPlan",
+        "description": "Create a multi-step task plan that persists across process restarts and tracks verifiable step completions.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "goal": {"type": "string", "description": "Overall objective of the plan."},
+                "steps": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Ordered list of step descriptions."
+                }
+            },
+            "required": ["goal", "steps"]
+        }
+    },
+    {
+        "name": "updateTaskPlanStep",
+        "description": "Update the execution status ('in_progress', 'completed', 'failed') and attach evidence to a plan step.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "plan_id": {"type": "string", "description": "Durable plan ID."},
+                "step_index": {"type": "integer", "description": "0-based step index."},
+                "status": {"type": "string", "description": "'pending', 'in_progress', 'completed', 'failed'."},
+                "evidence": {"type": "string", "description": "Optional proof or summary of step completion."}
+            },
+            "required": ["plan_id", "step_index", "status"]
+        }
+    },
+    {
+        "name": "getActiveTaskPlan",
+        "description": "Retrieve the current in-progress durable task plan that survived restarts.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
     }
 ]
 
@@ -2248,6 +2348,95 @@ def _handle_get_media_history(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"getMediaPlaybackHistory error: {e}"}
 
 
+def _handle_undo_last_action(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.friday_receipts import undo_last_action
+        return undo_last_action()
+    except Exception as e:
+        return {"ok": False, "error": f"undoLastAction error: {e}"}
+
+
+def _handle_list_execution_receipts(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.friday_receipts import list_execution_receipts
+        limit = int(args.get("limit") or 15)
+        return list_execution_receipts(limit=limit)
+    except Exception as e:
+        return {"ok": False, "error": f"listExecutionReceipts error: {e}"}
+
+
+def _handle_remember_user_preference(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.friday_memory import remember_user_preference
+        key = args.get("key") or args.get("name") or ""
+        val = args.get("value") or args.get("pref") or ""
+        cat = args.get("category") or "preferences"
+        return remember_user_preference(key, val, category=cat)
+    except Exception as e:
+        return {"ok": False, "error": f"rememberUserPreference error: {e}"}
+
+
+def _handle_recall_preferences(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.friday_memory import recall_user_preferences
+        q = args.get("query") or args.get("q") or ""
+        cat = args.get("category") or ""
+        return recall_user_preferences(query=q, category=cat)
+    except Exception as e:
+        return {"ok": False, "error": f"recallPreferences error: {e}"}
+
+
+def _handle_forget_user_preference(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.friday_memory import forget_user_preference
+        key = args.get("key") or args.get("name") or ""
+        return forget_user_preference(key)
+    except Exception as e:
+        return {"ok": False, "error": f"forgetUserPreference error: {e}"}
+
+
+def _handle_check_action_policy(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.friday_policy import check_action_policy
+        tname = args.get("tool_name") or args.get("action") or ""
+        params = args.get("params") or {}
+        return check_action_policy(tname, params=params)
+    except Exception as e:
+        return {"ok": False, "error": f"checkActionPolicy error: {e}"}
+
+
+def _handle_create_durable_task_plan(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.friday_tasks import create_durable_task_plan
+        goal = args.get("goal") or args.get("objective") or ""
+        steps = args.get("steps") or []
+        if isinstance(steps, str):
+            steps = [s.strip() for s in steps.splitlines() if s.strip()]
+        return create_durable_task_plan(goal, steps)
+    except Exception as e:
+        return {"ok": False, "error": f"createDurableTaskPlan error: {e}"}
+
+
+def _handle_update_task_plan_step(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.friday_tasks import update_task_plan_step
+        plan_id = args.get("plan_id") or ""
+        step_idx = int(args.get("step_index", 0))
+        status = args.get("status") or "completed"
+        evidence = args.get("evidence")
+        return update_task_plan_step(plan_id, step_idx, status, evidence=evidence)
+    except Exception as e:
+        return {"ok": False, "error": f"updateTaskPlanStep error: {e}"}
+
+
+def _handle_get_active_task_plan(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.friday_tasks import get_active_task_plan
+        return get_active_task_plan()
+    except Exception as e:
+        return {"ok": False, "error": f"getActiveTaskPlan error: {e}"}
+
+
 
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "getCurrentTime": _handle_time,
@@ -2372,6 +2561,16 @@ BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "listIPTVChannels": _handle_list_iptv_channels,
     "aiMediaCopilot": _handle_ai_media_copilot,
     "getMediaPlaybackHistory": _handle_get_media_history,
+    # Friday Assistant Architecture Suite
+    "undoLastAction": _handle_undo_last_action,
+    "listExecutionReceipts": _handle_list_execution_receipts,
+    "rememberUserPreference": _handle_remember_user_preference,
+    "recallPreferences": _handle_recall_preferences,
+    "forgetUserPreference": _handle_forget_user_preference,
+    "checkActionPolicy": _handle_check_action_policy,
+    "createDurableTaskPlan": _handle_create_durable_task_plan,
+    "updateTaskPlanStep": _handle_update_task_plan_step,
+    "getActiveTaskPlan": _handle_get_active_task_plan,
 }
 
 
@@ -2431,6 +2630,10 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         'searchUniversalMedia': [('q', 'query'), ('search', 'query'), ('term', 'query')],
         'playMediaStream': [('url', 'stream_url'), ('stream', 'stream_url'), ('target', 'stream_url'), ('query', 'stream_url')],
         'aiMediaCopilot': [('vibe', 'prompt'), ('mood', 'prompt'), ('query', 'prompt')],
+        'rememberUserPreference': [('name', 'key'), ('pref', 'value')],
+        'forgetUserPreference': [('name', 'key')],
+        'recallPreferences': [('q', 'query'), ('search', 'query')],
+        'createDurableTaskPlan': [('objective', 'goal'), ('tasks', 'steps')],
     }
     for src, dst in arg_mappings.get(name, []):
         if src in args and dst not in args:

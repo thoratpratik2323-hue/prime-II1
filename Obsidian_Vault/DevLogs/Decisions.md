@@ -105,3 +105,14 @@
   3. actions/opal_ai_copilot.py: On-device AI media copilot & mood matcher ("coding synthwave", "chill study lofi", movie recommendations)
   4. actions/opal_media_hub.py: Multi-source aggregator across IPTV, local library, and YouTube with local playback history
   5. Registered 5 new tools (searchUniversalMedia, playMediaStream, listIPTVChannels, aiMediaCopilot, getMediaPlaybackHistory) bringing Prime's active tools to 126 with 18/18 unit tests passing.
+
+
+### [2026-09-30 22:18:00] Friday Execution Receipts, Memory Ledger, Policy Gate & Task Planner Suite
+- **Decision**: Integrated Friday architecture (debpalash/friday) into Prime AI
+- **Details**: Built 4 core modules:
+  1. actions/friday_receipts.py: Pre-state snapshots, cryptographic SHA-256 receipts, and atomic undo/rollback engine (file deletions, modifications, process terminations).
+  2. actions/friday_memory.py: Explicit user preference & memory ledger with CRUD operations (remember, recall, forget) and system prompt context synthesis.
+  3. actions/friday_policy.py: Safe/Sensitive/High-Risk safety boundary evaluator with cryptographic one-time token approval gating for destructive operations.
+  4. actions/friday_tasks.py: Restart-safe, state-persisted durable multi-step task planner surviving process restarts.
+  5. Registered 9 new tools (undoLastAction, listExecutionReceipts, rememberUserPreference, recallPreferences, forgetUserPreference, checkActionPolicy, createDurableTaskPlan, updateTaskPlanStep, getActiveTaskPlan) bringing Prime's total active tools to 135 with 11/11 suite tests and 77/77 full system regression tests passing.
+
