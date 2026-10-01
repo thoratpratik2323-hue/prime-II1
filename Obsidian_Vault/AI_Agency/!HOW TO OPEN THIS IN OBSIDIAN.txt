@@ -1,0 +1,52 @@
+HOW TO OPEN THIS IN OBSIDIAN
+=============================
+
+This vault is a folder of linked notes, meant to be read inside a free app
+called Obsidian, not just opened one file at a time in a text editor.
+
+It takes about two minutes to set up.
+
+
+STEP 1: GET OBSIDIAN
+
+Go to https://obsidian.md/download and install the free version for your
+computer (Mac, Windows, and Linux are all supported).
+
+
+STEP 2: OPEN THIS FOLDER AS A VAULT
+
+Open Obsidian. On the welcome screen, click "Open folder as vault."
+(If you don't see that screen, use the vault switcher in the bottom
+left corner instead, and choose "Open folder as vault" from there.)
+
+Select this entire folder, the one this file is sitting in. Obsidian will
+open it and show you the file list on the left.
+
+
+STEP 3: START READING
+
+In the left sidebar, open:
+
+    00 - START HERE.md
+
+That file tells you the reading order and gives you a fast path if you
+want to start building today instead of reading everything first.
+
+Blue underlined text throughout the vault is a link to another lesson.
+Click it and Obsidian jumps straight there. Use the back arrow (or
+Cmd+[ / Ctrl+[) to jump back.
+
+
+BONUS: SEE THE GRAPH VIEW
+
+This vault has hundreds of notes linked together. To see that as a live,
+moving web of dots, click the graph icon in the left sidebar, or press
+Cmd+G (Mac) / Ctrl+G (Windows). Drag any dot around and watch it ripple.
+
+
+THAT'S IT
+
+You don't need to learn anything else about Obsidian to use this vault.
+Open a note, read it, click the links that interest you.
+
+Questions: support@theaiagencyvault.com
