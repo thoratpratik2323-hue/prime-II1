@@ -215,6 +215,57 @@ class AIAgent:
         self.history.clear()
         self.init_provider()
 
+    def _intercept_and_execute_tool(self, fn_name: str, fn_args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Automatic Safety Gating & Pre-State Snapshot Interceptor.
+        1. Evaluates Friday safety policy (blocks destructive commands without approval token).
+        2. Captures cryptographic pre-state snapshot for stateful mutations.
+        3. Executes tool.
+        4. Logs execution receipt status.
+        """
+        # 1. Friday Safety Policy Gating
+        try:
+            from actions.friday_policy import check_action_policy
+            policy = check_action_policy(fn_name, fn_args)
+            if policy.get("status") in ("GATED", "APPROVAL_REQUIRED") or policy.get("approval_required"):
+                return {
+                    "ok": False,
+                    "error": f"Action '{fn_name}' GATED by Safety Policy: {policy.get('reason')}. Approval token: {policy.get('approval_token')}. Please ask operator for explicit confirmation before running.",
+                    "gated": True,
+                    "approval_token": policy.get("approval_token"),
+                }
+        except Exception:
+            pass
+
+        # 2. Pre-state snapshot capture for file/terminal mutations
+        receipt_action = None
+        if fn_name in ("runTerminalCommand", "executePowerShell", "patchCodeFile", "createFile", "deleteFile"):
+            try:
+                from actions.friday_receipts import capture_pre_state
+                receipt_action = capture_pre_state(
+                    tool_name=fn_name,
+                    params=fn_args,
+                    target_path=fn_args.get("file_path") or fn_args.get("path")
+                )
+            except Exception:
+                pass
+
+        # 3. Execute tool
+        res = execute_tool(fn_name, fn_args)
+
+        # 4. Finalize receipt record
+        if receipt_action:
+            try:
+                from actions.friday_receipts import record_receipt
+                if isinstance(res, dict) and not res.get("ok", True):
+                    record_receipt(receipt_action, status="FAILED", error=str(res.get("error")))
+                else:
+                    record_receipt(receipt_action, status="SUCCESS")
+            except Exception:
+                pass
+
+        return res
+
     def process_message(
         self,
         user_input: str,
@@ -357,7 +408,7 @@ class AIAgent:
                     if voice.tts_enabled and fn_name in TOOL_ACKS:
                         voice.speak(TOOL_ACKS[fn_name])
 
-                    exec_res = execute_tool(fn_name, fn_args)
+                    exec_res = self._intercept_and_execute_tool(fn_name, fn_args)
                     if on_tool_result:
                         on_tool_result(fn_name, exec_res)
 
@@ -481,7 +532,7 @@ class AIAgent:
                     if voice.tts_enabled and fn_name in TOOL_ACKS:
                         voice.speak(TOOL_ACKS[fn_name])
 
-                    exec_res = execute_tool(fn_name, fn_args)
+                    exec_res = self._intercept_and_execute_tool(fn_name, fn_args)
                     if on_tool_result:
                         on_tool_result(fn_name, exec_res)
 

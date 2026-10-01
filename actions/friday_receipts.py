@@ -74,6 +74,7 @@ class FridayReceiptEngine:
             "receipt_id": receipt_id,
             "timestamp": now_iso,
             "action_type": action_type,
+            "tool_name": action_type,
             "target": target,
             "pre_state": pre_state,
             "post_state": post_state or {},
@@ -153,6 +154,35 @@ class FridayReceiptEngine:
 
 # Global singleton
 receipt_engine = FridayReceiptEngine()
+receipt_ledger = receipt_engine
+
+
+def capture_pre_state(tool_name: str, params: Optional[Dict[str, Any]] = None, target_path: Optional[str] = None) -> Dict[str, Any]:
+    """Capture snapshot of target state prior to tool mutation."""
+    target = target_path or (params or {}).get("command") or (params or {}).get("path") or tool_name
+    pre_state = {}
+    if target_path:
+        pre_state = receipt_engine.capture_file_state(target_path)
+    return {
+        "tool_name": tool_name,
+        "target": str(target),
+        "params": params or {},
+        "pre_state": pre_state,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+def record_receipt(receipt_action: Dict[str, Any], status: str = "SUCCESS", error: Optional[str] = None) -> Dict[str, Any]:
+    """Record receipt using the capture_pre_state payload."""
+    tool_name = receipt_action.get("tool_name", "unknown")
+    target = receipt_action.get("target", "unknown")
+    pre_state = receipt_action.get("pre_state", {})
+    metadata = {
+        "params": receipt_action.get("params", {}),
+        "status": status,
+        "error": error
+    }
+    return receipt_engine.record_receipt(tool_name, target, pre_state, metadata=metadata)
 
 
 def record_action_receipt(action_type: str, target: str, pre_state: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -165,3 +195,6 @@ def undo_last_action() -> Dict[str, Any]:
 
 def list_execution_receipts(limit: int = 15) -> Dict[str, Any]:
     return receipt_engine.list_receipts(limit=limit)
+
+
+get_execution_receipts = list_execution_receipts

@@ -262,6 +262,118 @@ def api_status():
         return jsonify({"status": "unknown", "error": str(e)})
 
 
+@app.route("/api/hud/state")
+def api_hud_state():
+    """
+    Consolidated HUD state endpoint providing live hardware, cognitive agent status,
+    HER coral aura visualizer parameters, active durable plan, and Friday receipts.
+    """
+    import psutil
+    try:
+        cpu = psutil.cpu_percent(interval=None)
+        mem = psutil.virtual_memory().percent
+    except Exception:
+        cpu, mem = 0.0, 0.0
+
+    # 1. Visualizer (HER Coral Breathing State)
+    visualizer_data = {}
+    try:
+        from actions.her_companion import get_her_visualizer_state
+        visualizer_data = get_her_visualizer_state()
+    except Exception as e:
+        visualizer_data = {"error": str(e)}
+
+    # 2. Durable Task Plan
+    active_plan = None
+    try:
+        from actions.friday_tasks import get_active_task_plan
+        plan_res = get_active_task_plan()
+        if plan_res.get("has_active_plan"):
+            active_plan = plan_res.get("plan")
+    except Exception:
+        pass
+
+    # 3. Recent Execution Receipts
+    recent_receipts = []
+    try:
+        from actions.friday_receipts import get_execution_receipts
+        rec_res = get_execution_receipts(limit=5)
+        recent_receipts = rec_res.get("receipts", [])
+    except Exception:
+        pass
+
+    # 4. User Preferences Memory Ledger count
+    preferences_count = 0
+    try:
+        from actions.friday_memory import memory_ledger
+        preferences_count = len(memory_ledger.memories)
+    except Exception:
+        pass
+
+    from tool_definitions import TOOL_SPECS
+    from config import config
+
+    return jsonify({
+        "ok": True,
+        "status": "online",
+        "timestamp": time.time(),
+        "hardware": {
+            "cpu_percent": cpu,
+            "ram_percent": mem,
+        },
+        "ai": {
+            "active_provider": config.get_active_provider(),
+            "tools_count": len(TOOL_SPECS),
+            "operator": "Pratik Thorat",
+            "preferences_count": preferences_count,
+        },
+        "visualizer": visualizer_data,
+        "active_plan": active_plan,
+        "recent_receipts": recent_receipts,
+    })
+
+
+@app.route("/api/hud/stream")
+def api_hud_stream():
+    """Real-time SSE stream of HUD telemetry and HER breathing visualizer frames."""
+    def hud_event_stream():
+        import psutil
+        try:
+            from actions.her_companion import get_her_visualizer_state
+            from actions.friday_tasks import get_active_task_plan
+            from actions.friday_receipts import get_execution_receipts
+            from config import config
+            from tool_definitions import TOOL_SPECS
+
+            while True:
+                cpu = psutil.cpu_percent(interval=None)
+                mem = psutil.virtual_memory().percent
+                vis = get_her_visualizer_state()
+                plan_res = get_active_task_plan()
+                active_plan = plan_res.get("plan") if plan_res.get("has_active_plan") else None
+                rec_res = get_execution_receipts(limit=3)
+
+                payload = {
+                    "type": "hud_tick",
+                    "time": time.time(),
+                    "cpu": cpu,
+                    "ram": mem,
+                    "visualizer": vis,
+                    "active_plan": active_plan,
+                    "recent_receipts": rec_res.get("receipts", []),
+                    "tools_count": len(TOOL_SPECS),
+                    "provider": config.get_active_provider(),
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+                time.sleep(1.5)
+        except GeneratorExit:
+            pass
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return Response(stream_with_context(hud_event_stream()), mimetype="text/event-stream")
+
+
 def run_server(port: int = 8765):
     ip = get_local_ip()
     print("=" * 60)

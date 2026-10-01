@@ -305,6 +305,29 @@ def query_facts(subject: str = "", predicate: str = "",
             conn.close()
 
 
+def delete_fact(subject: str = "", predicate: str = "") -> int:
+    """Delete facts matching subject and/or predicate."""
+    conditions = []
+    params = []
+    if subject:
+        conditions.append("subject LIKE ?")
+        params.append(f"%{subject.strip()}%")
+    if predicate:
+        conditions.append("predicate LIKE ?")
+        params.append(f"%{predicate.strip()}%")
+    if not conditions:
+        return 0
+    where = " AND ".join(conditions)
+    with _lock:
+        conn = _get_db()
+        try:
+            cur = conn.execute(f"DELETE FROM facts WHERE {where}", params)
+            conn.commit()
+            return cur.rowcount
+        finally:
+            conn.close()
+
+
 def query_timeline(start_date: str = "", end_date: str = "",
                    event_type: str = "", limit: int = 50) -> list[dict]:
     """Query the timeline by date range and/or event type."""

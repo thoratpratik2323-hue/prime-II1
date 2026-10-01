@@ -608,11 +608,16 @@ class VoiceEngine:
                 except Exception:
                     pass
 
-    def speak(self, text: str):
-        """Queue text to be spoken with streaming sentence pipelining for ultra-low latency (<350ms TTFB)."""
+    def speak(self, text: Any):
+        """Queue text to be spoken with streaming sentence pipelining for ultra-low latency (<350ms TTFB).
+        Accepts strings or streaming token iterators/generators.
+        """
+        if hasattr(text, '__iter__') and not isinstance(text, (str, bytes)):
+            return self.speak_streamed(text)
+
         if not self._tts_enabled or not text:
             return
-        clean_text = self._sanitize_for_tts(text)
+        clean_text = self._sanitize_for_tts(str(text))
         if clean_text:
             # Check audio cache first
             if clean_text in self._audio_cache:

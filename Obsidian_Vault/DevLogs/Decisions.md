@@ -139,3 +139,12 @@
 
 
 
+
+
+### [2026-10-01 07:37:49] Prime AI 4-Tier Architectural Upgrades
+- **Decision**: Implemented and verified Sentence-Streaming TTS, Automated Safety Interceptor, Tri-Directional Memory Sync, and Live Visual HUD Telemetry.
+- **Details**: 1. voice_engine.py: Polymorphic streaming TTS with speak_streamed clause pipelining.
+2. ai_agent.py, friday_policy.py, friday_receipts.py: Automated safety gating with pre-state snapshots and crypto receipts.
+3. friday_memory.py, brain.py, obsidian_rag.py: Tri-directional sync across Friday JSON, Obsidian Vault Preferences.md, and SQLite Brain.
+4. mobile_room_server.py, mobile_room.html: /api/hud/state, /api/hud/stream, HER coral breathing sync, and durable task card.
+5. tests/test_system_upgrades.py: 91/91 full regression tests passed.

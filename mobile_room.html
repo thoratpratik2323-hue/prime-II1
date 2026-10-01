@@ -379,6 +379,18 @@
 
   <!-- Transcript & Controls -->
   <div class="controls">
+    <!-- Real-time HUD Telemetry & Durable Plan Banner -->
+    <div id="hudTelemetryBar" style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 8px; font-family: 'Orbitron', monospace; font-size: 10px; color: var(--text-dim); background: rgba(0,229,255,0.03); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px;">
+      <span>CPU: <b id="hudCpu" style="color:var(--cyan);">--%</b> | RAM: <b id="hudRam" style="color:var(--cyan);">--%</b></span>
+      <span id="hudCompanionMode" style="color: #FF6F61;">AURA: IDLE</span>
+    </div>
+    <!-- Active Durable Task Card (Visible when plan active) -->
+    <div id="hudPlanCard" style="display: none; width: 100%; margin-bottom: 8px; background: rgba(255, 171, 0, 0.08); border: 1px solid var(--amber); border-radius: 6px; padding: 6px 10px; font-size: 11px;">
+      <div style="font-family: 'Orbitron'; font-size: 9px; color: var(--amber); font-weight: 700; margin-bottom: 2px;">⚡ DURABLE PLAN IN PROGRESS</div>
+      <div id="hudPlanGoal" style="color: #fff; font-weight: 500;"></div>
+      <div id="hudPlanStep" style="color: var(--text-dim); font-size: 10px; margin-top: 2px;"></div>
+    </div>
+
     <div class="transcript-box" id="transcriptBox">
       <span style="color: #00e5ff;">Prime:</span> "Welcome back, Pratik! Cockpit is listening. Speak into your mic or type a command below."
     </div>
@@ -642,6 +654,63 @@
       }
     } catch (e) {
       appendLog('Mesh Error', 'Remote action error: ' + e.message, true);
+    }
+  }
+
+  // ── Live Visual HUD & Mobile Room SSE Stream ────────────────────────────
+  function initMeshEvents() {
+    try {
+      const evtSource = new EventSource('/api/hud/stream');
+      evtSource.onmessage = function(e) {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'hud_tick') {
+            const cpuEl = document.getElementById('hudCpu');
+            const ramEl = document.getElementById('hudRam');
+            if (cpuEl && data.cpu !== undefined) cpuEl.textContent = Math.round(data.cpu) + '%';
+            if (ramEl && data.ram !== undefined) ramEl.textContent = Math.round(data.ram) + '%';
+
+            // Visualizer Coral Breathing Aura Sync
+            if (data.visualizer && data.visualizer.render_params) {
+              const p = data.visualizer.render_params;
+              const auraEl = document.getElementById('hudCompanionMode');
+              if (auraEl) {
+                const modeStr = (p.mode || 'idle').toUpperCase();
+                auraEl.textContent = 'AURA: ' + modeStr;
+                if (data.visualizer.palette === 'coral') {
+                  auraEl.style.color = '#FF6F61';
+                }
+              }
+              if (data.visualizer.palette === 'coral' && p.ring_color) {
+                targetColor = parseInt(p.ring_color.replace('#', '0x'), 16);
+              }
+            }
+
+            // Durable Plan Card update
+            const planCard = document.getElementById('hudPlanCard');
+            const planGoal = document.getElementById('hudPlanGoal');
+            const planStep = document.getElementById('hudPlanStep');
+            if (data.active_plan && data.active_plan.goal) {
+              if (planCard) planCard.style.display = 'block';
+              if (planGoal) planGoal.textContent = data.active_plan.goal;
+              const curIdx = data.active_plan.current_step_index || 0;
+              const total = (data.active_plan.steps || []).length;
+              const stepDesc = (data.active_plan.steps[curIdx] || {}).description || 'In progress...';
+              if (planStep) planStep.textContent = `Step ${curIdx + 1}/${total}: ${stepDesc}`;
+            } else {
+              if (planCard) planCard.style.display = 'none';
+            }
+          }
+        } catch (err) {
+          console.warn('HUD tick parse error:', err);
+        }
+      };
+      evtSource.onerror = function() {
+        evtSource.close();
+        setTimeout(initMeshEvents, 3500);
+      };
+    } catch (e) {
+      console.warn('EventSource connection error:', e);
     }
   }
 

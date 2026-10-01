@@ -1,0 +1,68 @@
+[
+  {
+    "receipt_id": "rcpt_759b1d3ffe",
+    "timestamp": "2026-10-01T07:36:21.099909",
+    "action_type": "runTerminalCommand",
+    "target": "rm -rf /critical/system/path",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "rm -rf /critical/system/path"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_96a78d9487",
+    "timestamp": "2026-10-01T07:36:21.125663",
+    "action_type": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_cb6131569e",
+    "timestamp": "2026-10-01T07:36:59.863177",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_fb61710ca5",
+    "timestamp": "2026-10-01T07:37:08.349702",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
+  }
+]

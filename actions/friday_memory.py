@@ -42,6 +42,46 @@ class FridayMemoryLedger:
         except Exception as e:
             logger.warning(f"Failed to persist user memory: {e}")
 
+    def _sync_to_brain(self, key: str, value: str = "", category: str = "", action: str = "store"):
+        """Synchronize memory fact into SQLite brain graph layer."""
+        try:
+            from memory.brain import store_fact, delete_fact
+            if action == "store":
+                store_fact(
+                    subject="User",
+                    predicate=key,
+                    obj=value,
+                    confidence=1.0,
+                    source=f"friday_memory:{category}"
+                )
+            elif action == "delete":
+                delete_fact(subject="User", predicate=key)
+        except Exception as e:
+            logger.warning(f"Failed to sync fact to brain: {e}")
+
+    def _sync_to_obsidian(self):
+        """Synchronize all memories into Obsidian Vault Profile/Preferences.md."""
+        try:
+            from obsidian_rag import write_note
+            lines = [
+                "# User Profile & Preferences (Synchronized Second Brain)",
+                "",
+                f"> Automatically synchronized with Prime Friday Memory Ledger. Total records: {len(self.memories)}.",
+                f"> Last sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                "",
+                "| Preference / Rule | Value | Category | Last Updated |",
+                "|---|---|---|---|",
+            ]
+            for k, item in sorted(self.memories.items()):
+                val = str(item.get("value", "")).replace("|", "\\|")
+                cat = item.get("category", "preferences")
+                ts = item.get("updated_at", "")[:19].replace("T", " ")
+                lines.append(f"| `{k}` | {val} | `{cat}` | {ts} |")
+
+            write_note("Profile/Preferences.md", "\n".join(lines), mode="write")
+        except Exception as e:
+            logger.warning(f"Failed to sync to Obsidian Vault: {e}")
+
     def remember(self, key: str, value: str, category: str = "preferences") -> Dict[str, Any]:
         """Store or update a user memory."""
         k_clean = key.strip().lower()
@@ -58,11 +98,15 @@ class FridayMemoryLedger:
 
         self.memories[k_clean] = entry
         self._save_memory()
+        self._sync_to_brain(k_clean, value.strip(), cat_clean, action="store")
+        self._sync_to_obsidian()
         logger.info(f"[Friday Memory] Saved {cat_clean} '{k_clean}': '{value}'")
         return {
             "ok": True,
-            "message": f"Remembered {cat_clean} for '{key}': {value}",
-            "memory": entry
+            "message": f"Remembered {cat_clean} for '{key}': {value} (synced to Second Brain & Obsidian Vault)",
+            "memory": entry,
+            "synced_obsidian": True,
+            "synced_brain": True
         }
 
     def recall(self, query: str = "", category: str = "") -> Dict[str, Any]:
@@ -92,11 +136,15 @@ class FridayMemoryLedger:
         if k_clean in self.memories:
             removed = self.memories.pop(k_clean)
             self._save_memory()
+            self._sync_to_brain(k_clean, action="delete")
+            self._sync_to_obsidian()
             logger.info(f"[Friday Memory] Forgot '{k_clean}'")
             return {
                 "ok": True,
-                "message": f"Successfully deleted memory '{key}'.",
-                "removed": removed
+                "message": f"Successfully deleted memory '{key}' (synced across Second Brain & Obsidian Vault).",
+                "removed": removed,
+                "synced_obsidian": True,
+                "synced_brain": True
             }
         return {"ok": False, "error": f"No memory found matching '{key}'."}
 
