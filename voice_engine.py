@@ -8,6 +8,7 @@ Includes speech recognition with ambient noise adjustment.
 from __future__ import annotations
 
 import asyncio
+import collections
 import io
 import logging
 import os
@@ -185,8 +186,18 @@ class VoiceEngine:
         except Exception as e:
             log.warning("Could not init pygame.mixer: %s", e)
 
+        # Dispatch tracker for test inspection and race-free queue monitoring
+        self._dispatched_history = collections.deque(maxlen=50)
+
         # Start TTS background worker
         self._start_tts_worker()
+
+    def _dispatch_tts_item(self, text: str):
+        """Append to dispatch history and enqueue into tts_queue."""
+        s = str(text).strip()
+        if s:
+            self._dispatched_history.append(s)
+            self.tts_queue.put(s)
 
     @property
     def is_speaking(self) -> bool:
@@ -268,15 +279,17 @@ class VoiceEngine:
                 if text is None:
                     break
 
-                if not self._tts_enabled or not text.strip():
+                text_str = str(text).strip()
+                if not self._tts_enabled or not text_str:
                     self.tts_queue.task_done()
                     continue
+                text = text_str
 
                 self._abort_utterance.clear()
                 self._is_speaking = True
                 try:
                     played = False
-                    curr = self.current_voice.strip()
+                    curr = str(self.current_voice).strip()
                     curr_lower = curr.lower()
 
                     # 1. Check if configured for Mark-LIV Gemini voice (only if tts_engine is explicitly 'gemini')
@@ -426,8 +439,8 @@ class VoiceEngine:
             return False
 
     def _get_edge_rate(self) -> str:
-        """Calculate Edge-TTS rate string from config (e.g. '+22%')."""
-        raw = getattr(config, "voice_rate_str", "") or os.getenv("VOICE_RATE", "+22%").strip()
+        """Calculate Edge-TTS rate string from config (e.g. '+28%')."""
+        raw = getattr(config, "voice_rate_str", "") or os.getenv("VOICE_RATE", "+28%").strip()
         if "%" in raw:
             return raw if raw.startswith(("+", "-")) else f"+{raw}"
         try:
@@ -436,7 +449,7 @@ class VoiceEngine:
                 return f"+{val}%" if val > 0 else f"{val}%"
         except (ValueError, TypeError):
             pass
-        return "+22%"  # Crisp, lively conversational pace
+        return "+28%"  # Crisp, lively conversational pace
 
     def set_stark_filter(self, enabled: bool, intensity: float = 0.65) -> bool:
         """Toggle or configure the Stark Intercom acoustic filter."""
@@ -608,8 +621,9 @@ class VoiceEngine:
                 except Exception:
                     pass
 
-    def speak(self, text: Any):
-        """Queue text to be spoken with streaming sentence pipelining for ultra-low latency (<350ms TTFB).
+    def speak(self, text: Any, split_sentences: bool = False):
+        """Queue text to be spoken with seamless continuous synthesis (eliminating inter-sentence network pauses).
+        If split_sentences is explicitly True, divides sentences into discrete queue items.
         Accepts strings or streaming token iterators/generators.
         """
         if hasattr(text, '__iter__') and not isinstance(text, (str, bytes)):
@@ -624,12 +638,41 @@ class VoiceEngine:
                 self._play_cached_audio(clean_text)
                 return
 
-            # Split into sentence clauses so first sentence plays almost immediately
-            sentences = re.split(r'(?<=[.!?\n])\s+', clean_text)
-            for s in sentences:
-                s_clean = s.strip()
-                if s_clean:
-                    self.tts_queue.put(s_clean)
+            if split_sentences:
+                sentences = re.split(r'(?<=[.!?\n])\s+', clean_text)
+                for s in sentences:
+                    s_clean = s.strip()
+                    if s_clean:
+                        self._dispatch_tts_item(s_clean)
+                return
+
+            # Continuous synthesis: keep utterances intact up to ~1200 chars for smooth, natural cadence
+            # without jarring network reconnect latency or awkward pauses between sentences.
+            if len(clean_text) <= 1200:
+                self._dispatch_tts_item(clean_text)
+            else:
+                # For long texts, break on paragraphs or natural clause clusters (~800 chars)
+                paragraphs = [p.strip() for p in re.split(r'\n\s*\n+', clean_text) if p.strip()]
+                for p in paragraphs:
+                    if len(p) <= 1200:
+                        self._dispatch_tts_item(p)
+                    else:
+                        sentences = re.split(r'(?<=[.!?])\s+', p)
+                        cur_chunk = []
+                        cur_len = 0
+                        for s in sentences:
+                            s = s.strip()
+                            if not s:
+                                continue
+                            if cur_len + len(s) > 800 and cur_chunk:
+                                self._dispatch_tts_item(" ".join(cur_chunk))
+                                cur_chunk = [s]
+                                cur_len = len(s)
+                            else:
+                                cur_chunk.append(s)
+                                cur_len += len(s)
+                        if cur_chunk:
+                            self._dispatch_tts_item(" ".join(cur_chunk))
 
 
     def speak_streamed(self, token_iterator):
@@ -663,13 +706,13 @@ class VoiceEngine:
 
                 clean = self._sanitize_for_tts(clause)
                 if clean and len(clean) > 3:  # Skip tiny fragments
-                    self.tts_queue.put(clean)
+                    self._dispatch_tts_item(clean)
 
         # Flush remaining buffer
         if buffer.strip():
             clean = self._sanitize_for_tts(buffer)
             if clean:
-                self.tts_queue.put(clean)
+                self._dispatch_tts_item(clean)
 
         return full_text
 

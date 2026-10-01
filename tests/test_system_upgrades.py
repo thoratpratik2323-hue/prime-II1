@@ -43,12 +43,13 @@ class TestSystemUpgrades(unittest.TestCase):
         # Test speak with generator
         result = voice.speak(token_gen())
         self.assertIn("Systems are fully operational.", result)
-        # Drain the tts_queue
+        # Drain the tts_queue or check dispatched history if consumed by worker thread
         items = []
         while not voice.tts_queue.empty():
             items.append(voice.tts_queue.get_nowait())
-        self.assertTrue(len(items) >= 1)
-        self.assertTrue(any("hello" in s.lower() or "systems" in s.lower() for s in items))
+        all_items = items + list(getattr(voice, "_dispatched_history", []))
+        self.assertTrue(len(all_items) >= 1)
+        self.assertTrue(any("hello" in s.lower() or "systems" in s.lower() for s in all_items))
 
     # ── 2. Automatic Safety Policy Interceptor & Receipts ─────────────────
     def test_safety_interceptor_gating_destructive_command(self):

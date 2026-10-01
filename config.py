@@ -48,13 +48,17 @@ class Config:
         self.model = (os.getenv("AI_MODEL") or "").strip()
 
         self.voice_output = os.getenv("VOICE_OUTPUT", "true").strip().lower() in ("true", "1", "yes")
-        raw_rate = os.getenv("VOICE_RATE", "+22%").strip()
-        self.voice_rate_str = raw_rate if raw_rate else "+22%"
+        raw_rate = os.getenv("VOICE_RATE", "+28%").strip()
+        self.voice_rate_str = raw_rate if raw_rate else "+28%"
         try:
             clean_digits = re.sub(r"[^\d-]", "", raw_rate)
-            self.voice_rate = int(clean_digits) if clean_digits else 215
+            val = int(clean_digits) if clean_digits else 28
+            if -50 <= val <= 100:
+                self.voice_rate = max(120, min(350, int(200 * (1.0 + val / 100.0))))
+            else:
+                self.voice_rate = val
         except ValueError:
-            self.voice_rate = 215
+            self.voice_rate = 250
 
         try:
             self.voice_volume = float(os.getenv("VOICE_VOLUME", "1.0"))

@@ -159,7 +159,8 @@ class TestVoiceEngineLowLatency(unittest.TestCase):
         ve.tts_queue = MagicMock()
 
         sample_text = "Good morning Sir! All systems are operational. WhatsApp watcher is active."
-        ve.speak(sample_text)
+        # When split_sentences=True is requested
+        ve.speak(sample_text, split_sentences=True)
 
         # Should have split into 3 distinct sentences for streaming playback
         self.assertEqual(ve.tts_queue.put.call_count, 3)
@@ -167,6 +168,12 @@ class TestVoiceEngineLowLatency(unittest.TestCase):
         self.assertIn("Good morning Sir!", calls[0])
         self.assertIn("All systems are operational.", calls[1])
         self.assertIn("WhatsApp watcher is active.", calls[2])
+
+        # Test continuous mode (default) delivers intact utterance without pauses
+        ve.tts_queue.reset_mock()
+        ve.speak(sample_text)
+        self.assertEqual(ve.tts_queue.put.call_count, 1)
+        self.assertIn("All systems are operational.", ve.tts_queue.put.call_args[0][0])
 
     def test_sagar_tamang_ultron_and_friday_voice_routing(self):
         from voice_engine import voice
