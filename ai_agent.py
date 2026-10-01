@@ -854,18 +854,26 @@ class AIAgent:
                     voice.speak(msg)
                 return msg
 
-        # 4. Close application
-        m_close = re.match(r"(?:close|exit|quit|kill|band\s+karo)\s+([a-zA-Z0-9\s]+)", lower)
+        # 4. Close application (supports prefix & suffix phrasing in English & Hinglish)
+        m_close = (
+            re.search(r"^(?:close|exit|quit|kill|terminate|shut\s*down)\s+(?:the\s+)?([a-zA-Z0-9_\-\.\s]+?)(?:\s+(?:app|application|window|please))?$", lower)
+            or re.search(r"^(?:band\s+karo|band\s+kar\s+do|hatao|khatam\s+karo)\s+(?:the\s+)?([a-zA-Z0-9_\-\.\s]+?)(?:\s+(?:app|application|window))?$", lower)
+            or re.search(r"^([a-zA-Z0-9_\-\.\s]+?)\s+(?:close\s+karo|close\s+kar\s+do|band\s+karo|band\s+kar\s+do|hatao|kill\s+karo)$", lower)
+            or re.search(r"\b(?:close|kill|exit)\s+([a-zA-Z0-9_\-\.]+)\b", lower)
+        )
         if m_close:
             target = m_close.group(1).strip()
-            res = execute_tool("closeApplication", {"name": target})
-            if res.get("ok") is False:
-                msg = res.get("error", "Failed to close application.")
-            else:
-                msg = _extract_res_str(res, f"Closed {target}.")
-            if voice.tts_enabled:
-                voice.speak(msg)
-            return msg
+            # Clean any remaining filler words
+            target = re.sub(r"\b(app|application|the|please|window)\b", "", target, flags=re.IGNORECASE).strip()
+            if target:
+                res = execute_tool("closeApplication", {"name": target})
+                if res.get("ok") is False:
+                    msg = res.get("error", f"Failed to close {target}.")
+                else:
+                    msg = _extract_res_str(res, f"Closed {target}.")
+                if voice.tts_enabled:
+                    voice.speak(msg)
+                return msg
 
         # 5. YouTube Search (only on explicit search intent)
         if "search youtube for" in lower or "youtube search" in lower or lower.startswith("search youtube"):

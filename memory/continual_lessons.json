@@ -181,5 +181,12 @@
     "topic": "Tool Failure: sendWhatsAppMessage",
     "insight": "Command 'send message to young hello' failed with args {}. Ensure parameters and fallback routing are validated.",
     "source": "trace_reflection_loop"
+  },
+  {
+    "id": 27,
+    "timestamp": "2026-10-01T08:25:48.244160",
+    "topic": "Tool Failure: minimizeWindow",
+    "insight": "Command 'reduce yourself' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
   }
 ]
