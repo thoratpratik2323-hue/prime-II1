@@ -43,12 +43,16 @@ from tool_definitions import TOOL_SPECS, execute_tool
 from voice_engine import voice
 
 # Force UTF-8 on Windows
+os.environ["PYTHONIOENCODING"] = "utf-8"
+os.environ["PYTHONUTF8"] = "1"
 if sys.platform == "win32":
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        sys.stdin.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
+
 
 # Cyberpunk Neon Theme
 custom_theme = Theme({
