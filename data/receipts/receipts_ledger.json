@@ -217,5 +217,124 @@
       "error": null
     },
     "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_12423b760a",
+    "timestamp": "2026-10-01T19:26:30.358990",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_6f9b6477f5",
+    "timestamp": "2026-10-01T19:29:47.190941",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_2581c9522a",
+    "timestamp": "2026-10-01T19:34:38.921832",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "powershell -Command \"Get-MpComputerStatus | Select-Object AntivirusEnabled, RealTimeProtectionEnabled, QuickScanAge, FullScanAge\"",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "powershell -Command \"Get-MpComputerStatus | Select-Object AntivirusEnabled, RealTimeProtectionEnabled, QuickScanAge, FullScanAge\""
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_d9089495ef",
+    "timestamp": "2026-10-01T19:36:36.722513",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "powershell -Command \"Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 Name, @{Name='CPU(s)';Expression={$_.CPU}}, WorkingSet64 | Format-Table -AutoSize\"",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "powershell -Command \"Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 Name, @{Name='CPU(s)';Expression={$_.CPU}}, WorkingSet64 | Format-Table -AutoSize\""
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_195a7152a1",
+    "timestamp": "2026-10-01T19:48:14.896848",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_e79d50a4ce",
+    "timestamp": "2026-10-01T21:42:32.527361",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_15a3559240",
+    "timestamp": "2026-10-01T21:47:15.641231",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
   }
 ]

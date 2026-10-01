@@ -58,3 +58,7 @@ logs/
 exports/*.zip
 bin/
 scratch/
+data/dots/
+memory/prime_process.pid
+Obsidian_Vault/.md
+Obsidian_Vault/Dots/
