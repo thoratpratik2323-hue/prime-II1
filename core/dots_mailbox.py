@@ -68,16 +68,19 @@ class DotsMailbox:
         }
 
         # Write atomically via temp file to avoid partial reads
-        fd, temp_path = tempfile.mkstemp(dir=str(self.outbox_dir), prefix="msg_", suffix=".tmp")
+        temp_path = self.outbox_dir / f"tmp_{msg_id}.tmp"
+        target_path = self.outbox_dir / f"{int(time.time()*1000)}_{msg_id}.json"
         try:
-            with open(fd, "w", encoding="utf-8") as f:
+            with open(temp_path, "w", encoding="utf-8") as f:
                 json.dump(message, f, indent=2)
-            target_path = self.outbox_dir / f"{int(time.time()*1000)}_{msg_id}.json"
-            os.replace(temp_path, target_path)
+            os.replace(str(temp_path), str(target_path))
             logger.info("[Mailbox %s] Queued message %s to %s", self.dot_id, msg_id, recipient_id)
         except Exception as e:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except Exception:
+                    pass
             raise e
 
         return message
@@ -187,11 +190,26 @@ class DotsMailboxRouter:
                         # Copy to recipient inbox
                         shutil.copy2(str(msg_file), str(target_file))
 
-                        # Move from outbox to sent
+                        # Move from outbox to sent with retry for Windows lock release
                         sent_dir = outbox / ".sent"
                         sent_dir.mkdir(parents=True, exist_ok=True)
-                        if msg_file.exists():
-                            shutil.move(str(msg_file), str(sent_dir / target_name))
+                        dest_file = sent_dir / target_name
+                        moved = False
+                        for _ in range(4):
+                            try:
+                                if msg_file.exists():
+                                    shutil.move(str(msg_file), str(dest_file))
+                                moved = True
+                                break
+                            except (PermissionError, OSError):
+                                time.sleep(0.04)
+
+                        if not moved and msg_file.exists():
+                            try:
+                                shutil.copy2(str(msg_file), str(dest_file))
+                                msg_file.unlink(missing_ok=True)
+                            except Exception:
+                                pass
 
                         delivered_count += 1
                         logger.info("[Router] Delivered %s from %s -> %s", msg.get("id"), sender_id, recipient_id)

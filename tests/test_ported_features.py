@@ -140,8 +140,9 @@ class TestPortedFeatures(unittest.TestCase):
         res = automate_drive("new document")
         self.assertIn("google document", res.lower())
 
+    @patch("whatsapp_manager.send_whatsapp")
     @patch("actions.whatsapp_automation.open_in_firefox")
-    def test_send_whatsapp(self, mock_open):
+    def test_send_whatsapp(self, mock_open, mock_send_mgr):
         res = send_whatsapp("Pratik", "Hello Sir")
         self.assertIn("WhatsApp transmission", res)
         mock_open.assert_called_once()

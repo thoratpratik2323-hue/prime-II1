@@ -88,8 +88,10 @@ class TestMunderDifflinFeatures(unittest.TestCase):
     # ── 2. Flying Envelope Event Stream ──────────────────────────────────
     def test_router_flight_telemetry(self):
         """Verify mailbox router records envelope flight events for 2D office floor."""
-        dot_x = "dot_alpha"
-        dot_y = "dot_beta"
+        import uuid
+        uid = uuid.uuid4().hex[:8]
+        dot_x = f"dot_alpha_{uid}"
+        dot_y = f"dot_beta_{uid}"
 
         mb_x = DotsMailbox(dot_x)
         mb_x.send_message(dot_y, "Test Ping", "Hello from Alpha")
