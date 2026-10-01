@@ -582,6 +582,52 @@ class AIAgent:
                 return str(r)
             return str(r_obj) if r_obj else default
 
+        # 0A. Voice-First HITL Approval / Rejection Fast-Path
+        m_approve = re.search(r"^(?:yes\s+)?(?:approve|allow|kar\s*do|haan\s*kar\s*do|permission\s*granted|grant\s*permission)(?:\s+(?:it|this|that|action|dot))?$", lower) or lower in ("approve", "yes approve", "approve it", "approve karo", "permission granted", "grant permission", "allow it", "kar do", "ha kar do", "yes do it")
+        m_reject = re.search(r"^(?:reject|deny|cancel|mat\s*karo|reject\s*kar\s*do)(?:\s+(?:it|this|that|action|dot|approval))?$", lower) or lower in ("reject", "reject it", "deny", "cancel", "cancel approval", "mat karo", "reject kar do", "cancel that", "deny permission")
+        if m_approve or m_reject:
+            from core.prime_dots import dot_engine
+            pending = dot_engine.get_pending_approvals()
+            if pending:
+                target_dot = pending[0]
+                target_id = target_dot["dot_id"]
+                target_name = target_dot["name"]
+                is_approval = bool(m_approve)
+                ok = dot_engine.approve_dot_action(target_id, approved=is_approval)
+                decision_str = "approved" if is_approval else "rejected"
+                if ok:
+                    msg = f"Sir, I have {decision_str} the requested action for Dot '{target_name}'. Execution has resumed." if is_approval else f"Sir, I have rejected the action for Dot '{target_name}'. The Dot will adjust its plan."
+                else:
+                    msg = f"Could not update approval for Dot '{target_name}'."
+                if voice.tts_enabled:
+                    voice.speak(msg)
+                return msg
+
+        # 0B. Stapler Dictation Toggle Fast-Path
+        if any(k in lower for k in ("toggle stapler", "start stapler", "stop stapler", "enable dictation", "disable dictation", "stapler dictation")):
+            from actions.stapler_dictation import stapler_engine
+            if "stop" in lower or "disable" in lower:
+                stapler_engine.stop()
+                msg = "Stapler system-wide dictation deactivated."
+            elif "start" in lower or "enable" in lower:
+                stapler_engine.start()
+                msg = "Stapler system-wide dictation activated. Press Ctrl+Alt+Space anywhere on Windows to dictate."
+            else:
+                active = stapler_engine.toggle()
+                msg = "Stapler system-wide dictation activated. Press Ctrl+Alt+Space to dictate." if active else "Stapler system-wide dictation deactivated."
+            if voice.tts_enabled:
+                voice.speak(msg)
+            return msg
+
+        # 0C. Open 2D Virtual Office Floor HUD
+        if any(k in lower for k in ("open office floor", "show office floor", "open office", "2d office", "office floor")):
+            from desktop_agent.tools_websites import open_url_in_chrome
+            open_url_in_chrome("http://localhost:8765/office")
+            msg = "Opening Prime AI 2D Virtual Office Floor in Google Chrome, Sir."
+            if voice.tts_enabled:
+                voice.speak(msg)
+            return msg
+
         # 1. Close Active Window / App (Generic English & Hinglish)
         if (
             re.search(r"^(?:close|exit|quit|band\s*karo|band\s*kar\s*do|hatao)\s*(?:the\s+)?(?:app|application|window|this|current|ye\s*app|is\s*app)?\s*(?:please)?$", lower)

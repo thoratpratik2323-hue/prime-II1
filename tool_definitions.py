@@ -2796,14 +2796,95 @@ def _handle_read_dot_canvas(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"readDotCanvas error: {e}"}
 
 
+def _handle_send_dot_message(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.prime_dots import dot_engine
+        sender = str(args.get("sender") or "").strip()
+        recipient = str(args.get("recipient") or "").strip()
+        subject = str(args.get("subject") or "Task Update").strip()
+        body = str(args.get("body") or "").strip()
+        if not (sender and recipient and body):
+            return {"ok": False, "error": "sender, recipient, and body are required."}
+        dot = dot_engine.get_dot(sender)
+        if not dot:
+            return {"ok": False, "error": f"Sender dot '{sender}' not found."}
+        res = dot.send_message(recipient, subject, body)
+        return {"ok": True, "message": f"Message sent from '{sender}' to '{recipient}'.", "data": res}
+    except Exception as e:
+        return {"ok": False, "error": f"sendDotMessage error: {e}"}
+
+
+def _handle_read_dot_inbox(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.prime_dots import dot_engine
+        dot_id = str(args.get("dot_id") or "").strip()
+        if not dot_id:
+            return {"ok": False, "error": "dot_id is required."}
+        dot = dot_engine.get_dot(dot_id)
+        if not dot:
+            return {"ok": False, "error": f"Dot '{dot_id}' not found."}
+        msgs = dot.read_inbox(mark_as_done=bool(args.get("mark_as_done", True)))
+        return {"ok": True, "messages": msgs, "count": len(msgs)}
+    except Exception as e:
+        return {"ok": False, "error": f"readDotInbox error: {e}"}
+
+
+def _handle_toggle_stapler_dictation(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from actions.stapler_dictation import stapler_engine
+        action = str(args.get("action") or "toggle").lower().strip()
+        if action == "start":
+            stapler_engine.start()
+        elif action == "stop":
+            stapler_engine.stop()
+        elif action == "dictate":
+            return stapler_engine.record_and_inject()
+        else:
+            stapler_engine.toggle()
+        return {"ok": True, "enabled": stapler_engine.enabled, "hotkey": "Ctrl+Alt+Space"}
+    except Exception as e:
+        return {"ok": False, "error": f"toggleStaplerDictation error: {e}"}
+
+
+def _handle_open_office_floor(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from desktop_agent.tools_websites import open_url_in_chrome
+        open_url_in_chrome("http://localhost:8765/office")
+        return {"ok": True, "message": "2D Virtual Office Floor opened at http://localhost:8765/office in Google Chrome."}
+    except Exception as e:
+        return {"ok": False, "error": f"openOfficeFloor error: {e}"}
+
+
+def _handle_resolve_dot_approval(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.prime_dots import dot_engine
+        dot_id = str(args.get("dot_id") or "").strip()
+        approved = bool(args.get("approved", True))
+        if not dot_id:
+            pending = dot_engine.get_pending_approvals()
+            if pending:
+                dot_id = pending[0]["dot_id"]
+        if not dot_id:
+            return {"ok": False, "error": "No pending dot approvals found."}
+        ok = dot_engine.approve_dot_action(dot_id, approved=approved)
+        return {"ok": ok, "message": f"Dot '{dot_id}' approval {'granted' if approved else 'rejected'}."}
+    except Exception as e:
+        return {"ok": False, "error": f"resolveDotApproval error: {e}"}
+
+
 
 
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
-    # Prime Dots Autonomous Background Daemon Suite
+    # Prime Dots Autonomous Background Daemon Suite & Munder Difflin Layer
     "spawnPrimeDot": _handle_spawn_prime_dot,
     "listPrimeDots": _handle_list_prime_dots,
     "controlPrimeDot": _handle_control_prime_dot,
     "readDotCanvas": _handle_read_dot_canvas,
+    "sendDotMessage": _handle_send_dot_message,
+    "readDotInbox": _handle_read_dot_inbox,
+    "toggleStaplerDictation": _handle_toggle_stapler_dictation,
+    "openOfficeFloor": _handle_open_office_floor,
+    "resolveDotApproval": _handle_resolve_dot_approval,
     "getCurrentTime": _handle_time,
     "getTime": _handle_time,
     "currentTime": _handle_time,

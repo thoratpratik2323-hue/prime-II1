@@ -65,12 +65,36 @@ class PrimeDot:
         self.canvas_file = DOTS_CANVAS_DIR / f"{self.dot_id}.md"
         self.sandbox_path = DOTS_SANDBOX_DIR / self.dot_id
 
+        # Munder Difflin Asynchronous Mailbox layer
+        from core.dots_mailbox import DotsMailbox
+        self.mailbox = DotsMailbox(self.dot_id)
+
         # Runtime control events
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._pause_event = threading.Event()
         self._approval_event = threading.Event()
         self._approval_decision = False
+
+    def send_message(
+        self,
+        recipient_id: str,
+        subject: str,
+        body: str,
+        action: str = "data_share",
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Send an asynchronous stigmergic message to another Dot's inbox."""
+        res = self.mailbox.send_message(recipient_id, subject, body, action, payload)
+        self._log(f"Sent mailbox message to {recipient_id}: {subject}")
+        return res
+
+    def read_inbox(self, mark_as_done: bool = True) -> List[Dict[str, Any]]:
+        """Read and drain unread messages from own inbox."""
+        msgs = self.mailbox.read_inbox(mark_as_done)
+        if msgs:
+            self._log(f"Read {len(msgs)} message(s) from inbox.")
+        return msgs
 
     @staticmethod
     def _generate_default_name(goal: str) -> str:
@@ -101,6 +125,8 @@ class PrimeDot:
             "enrichLead",
             "scanBuyingSignals",
             "draftGTMOutreach",
+            "sendDotMessage",
+            "readDotInbox",
         ]
 
     def to_dict(self) -> Dict[str, Any]:
@@ -118,6 +144,7 @@ class PrimeDot:
             "steps_completed": len(self.steps),
             "pending_approval": self.pending_approval,
             "findings_count": len(self.findings),
+            "unread_inbox": self.mailbox.get_unread_count(),
             "canvas_file": str(self.canvas_file),
             "sandbox_path": str(self.sandbox_path),
         }
@@ -559,6 +586,18 @@ class PrimeDotEngine:
             self._save_state()
             return ok
         return False
+
+    def get_pending_approvals(self) -> List[Dict[str, Any]]:
+        """Returns list of all Dots currently awaiting operator approval."""
+        res = []
+        for did, dot in self.dots.items():
+            if dot.status == "waiting_approval" and dot.pending_approval:
+                res.append({
+                    "dot_id": did,
+                    "name": dot.name,
+                    "pending_approval": dot.pending_approval,
+                })
+        return res
 
     def get_telemetry(self) -> Dict[str, Any]:
         total = len(self.dots)

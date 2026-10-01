@@ -22,6 +22,7 @@ load_dotenv()
 # Setup paths
 PROJECT_ROOT = Path(__file__).resolve().parent
 STATIC_FILE = PROJECT_ROOT / "mobile_room.html"
+OFFICE_FILE = PROJECT_ROOT / "office_floor.html"
 
 app = Flask(__name__, static_folder=str(PROJECT_ROOT))
 logging.basicConfig(level=logging.INFO)
@@ -450,6 +451,82 @@ def api_dots():
         return jsonify({"ok": True, "dot_id": dot_id, "canvas": content})
 
     return jsonify({"ok": False, "error": f"Unknown action: '{action}'"}), 400
+
+
+@app.route("/office")
+def office_view():
+    """Serve the 2D Virtual Office Floor UI."""
+    if OFFICE_FILE.exists():
+        return OFFICE_FILE.read_text(encoding="utf-8")
+    return "<h3>office_floor.html not found</h3>", 404
+
+
+@app.route("/api/office/state")
+def office_state():
+    """Return complete 2D office state including dots, envelope flights, and stapler status."""
+    from core.prime_dots import dot_engine
+    from core.dots_mailbox import mailbox_router
+    from actions.stapler_dictation import stapler_engine
+
+    dots_data = dot_engine.list_dots()
+    # Enrich each dot with unread inbox count
+    for d in dots_data:
+        dot = dot_engine.get_dot(d["dot_id"])
+        d["unread_inbox"] = dot.mailbox.get_unread_count() if dot else 0
+
+    flights = mailbox_router.get_recent_flights(seconds_window=45.0)
+    telemetry = dot_engine.get_telemetry()
+
+    return jsonify({
+        "ok": True,
+        "dots": dots_data,
+        "flights": flights,
+        "telemetry": telemetry,
+        "stapler": {
+            "enabled": stapler_engine.enabled,
+            "hotkey": "Ctrl+Alt+Space",
+        }
+    })
+
+
+@app.route("/api/stapler", methods=["GET", "POST"])
+def stapler_control():
+    """Query or toggle system-wide Stapler dictation hotkey."""
+    from actions.stapler_dictation import stapler_engine
+    if request.method == "GET":
+        return jsonify({"enabled": stapler_engine.enabled, "hotkey": "Ctrl+Alt+Space"})
+    data = request.get_json(force=True, silent=True) or {}
+    action = data.get("action", "toggle").lower()
+    if action == "start":
+        stapler_engine.start()
+    elif action == "stop":
+        stapler_engine.stop()
+    elif action == "toggle":
+        stapler_engine.toggle()
+    elif action == "dictate":
+        res = stapler_engine.record_and_inject()
+        return jsonify(res)
+    return jsonify({"ok": True, "enabled": stapler_engine.enabled})
+
+
+@app.route("/api/dots/message", methods=["POST"])
+def send_dot_message():
+    """Send asynchronous stigmergic message between Dots via Mailbox protocol."""
+    from core.prime_dots import dot_engine
+    data = request.get_json(force=True, silent=True) or {}
+    sender = data.get("sender")
+    recipient = data.get("recipient")
+    subject = data.get("subject", "Task Update")
+    body = data.get("body", "")
+    if not (sender and recipient and body):
+        return jsonify({"ok": False, "error": "sender, recipient, and body required"}), 400
+
+    s_dot = dot_engine.get_dot(sender)
+    if not s_dot:
+        return jsonify({"ok": False, "error": f"Sender dot '{sender}' not found"}), 404
+
+    msg = s_dot.send_message(recipient, subject, body)
+    return jsonify({"ok": True, "message": msg})
 
 
 

@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prime AI — 2D Virtual Office Floor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0d13;
+      --card-bg: rgba(18, 22, 34, 0.85);
+      --border: #1e2640;
+      --primary: #00f3ff;
+      --accent: #ff0055;
+      --success: #00ff88;
+      --warning: #ffb800;
+      --text: #e0e6ed;
+      --dim: #73819c;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Fira Code', monospace;
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: rgba(11, 13, 19, 0.95);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 800;
+      font-size: 1.1rem;
+      letter-spacing: 1px;
+      color: var(--primary);
+    }
+    .brand-badge {
+      font-size: 0.65rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(0, 243, 255, 0.15);
+      border: 1px solid var(--primary);
+      color: var(--primary);
+      font-family: 'Fira Code', monospace;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-family: 'Fira Code', monospace;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+    }
+    .btn-primary {
+      background: rgba(0, 243, 255, 0.15);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    .btn-stapler {
+      background: rgba(255, 184, 0, 0.15);
+      border-color: var(--warning);
+      color: var(--warning);
+    }
+
+    /* Main Office Canvas Container */
+    #office-container {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      height: calc(100vh - 65px);
+      background: radial-gradient(circle at 50% 30%, #151b2e 0%, #080a0f 80%);
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #floor-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Flying Envelope Layer */
+    #envelope-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .envelope {
+      position: absolute;
+      width: 32px;
+      height: 24px;
+      background: #ffb800;
+      border-radius: 3px;
+      box-shadow: 0 0 15px rgba(255, 184, 0, 0.8);
+      transform: translate(-50%, -50%);
+      transition: all 1.8s cubic-bezier(0.25, 1, 0.5, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #000;
+    }
+
+    /* Modal / Inspector Drawer */
+    #drawer {
+      position: fixed;
+      right: -420px;
+      top: 65px;
+      width: 400px;
+      height: calc(100vh - 65px);
+      background: rgba(14, 18, 28, 0.95);
+      backdrop-filter: blur(15px);
+      border-left: 1px solid var(--border);
+      box-shadow: -5px 0 25px rgba(0, 0, 0, 0.6);
+      transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+    }
+    #drawer.open {
+      right: 0;
+    }
+
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+    .drawer-title {
+      font-family: 'Orbitron', sans-serif;
+      color: var(--primary);
+      font-size: 1.1rem;
+    }
+    .drawer-close {
+      background: none;
+      border: none;
+      color: var(--dim);
+      font-size: 1.3rem;
+      cursor: pointer;
+    }
+    .drawer-close:hover { color: #fff; }
+
+    .drawer-content {
+      flex: 1;
+      overflow-y: auto;
+      font-size: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .metric-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+    .metric-label { font-size: 0.7rem; color: var(--dim); }
+    .metric-val { font-size: 0.95rem; font-weight: 600; color: #fff; }
+
+    .terminal-box {
+      background: #06070a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      max-height: 180px;
+      overflow-y: auto;
+      font-size: 0.75rem;
+      line-height: 1.4;
+      color: #9cdcfe;
+    }
+
+    .approval-banner {
+      background: rgba(255, 184, 0, 0.15);
+      border: 1px solid var(--warning);
+      padding: 12px;
+      border-radius: 6px;
+      color: var(--warning);
+    }
+    .approval-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .btn-approve {
+      background: var(--success);
+      color: #000;
+      font-weight: 700;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn-reject {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    /* Spawn Modal */
+    #spawn-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      z-index: 150;
+      justify-content: center;
+      align-items: center;
+    }
+    #spawn-modal.active { display: flex; }
+    .modal-box {
+      background: #111522;
+      border: 1px solid var(--border);
+      width: 460px;
+      border-radius: 8px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .input-field {
+      width: 100%;
+      background: #080a0f;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 10px;
+      border-radius: 6px;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.85rem;
+    }
+    .input-field:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <span>⚡ PRIME AI</span>
+      <span class="brand-badge">2D OFFICE FLOOR</span>
+    </div>
+    <div class="controls">
+      <button class="btn btn-stapler" id="stapler-btn" onclick="toggleStapler()">
+        <span>🎙️ STAPLER DICTATION</span>
+        <span id="stapler-state" style="font-size:0.7rem; opacity:0.8;">[OFF]</span>
+      </button>
+      <button class="btn btn-primary" onclick="openSpawnModal()">
+        <span>+ SPAWN AGENT</span>
+      </button>
+      <a href="/" class="btn">
+        <span>COCKPIT HUD</span>
+      </a>
+    </div>
+  </header>
+
+  <div id="office-container">
+    <canvas id="floor-canvas"></canvas>
+    <div id="envelope-layer"></div>
+  </div>
+
+  <!-- Agent Details Inspector Drawer -->
+  <div id="drawer">
+    <div class="drawer-header">
+      <div>
+        <div class="drawer-title" id="drawer-name">Dot Inspector</div>
+        <div style="font-size:0.75rem; color:var(--dim);" id="drawer-id">dot_00000000</div>
+      </div>
+      <button class="drawer-close" onclick="closeDrawer()">×</button>
+    </div>
+
+    <div class="drawer-content">
+      <div id="drawer-approval-zone" style="display:none;" class="approval-banner">
+        <div style="font-weight:700;">⚠️ ACTION GATED (HITL APPROVAL)</div>
+        <div id="drawer-approval-reason" style="font-size:0.75rem; margin-top:4px;">Sensitive boundary action.</div>
+        <div class="approval-actions">
+          <button class="btn-approve" onclick="resolveApproval(true)">Approve</button>
+          <button class="btn-reject" onclick="resolveApproval(false)">Reject</button>
+        </div>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric-box">
+          <div class="metric-label">STATUS</div>
+          <div class="metric-val" id="drawer-status">RUNNING</div>
+        </div>
+        <div class="metric-box">
+          <div class="metric-label">UNREAD MAIL</div>
+          <div class="metric-val" id="drawer-inbox">0 msgs</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="metric-label" style="margin-bottom:4px;">GOAL</div>
+        <div id="drawer-goal" style="color:#fff; font-size:0.85rem; line-height:1.4;">Goal objective...</div>
+      </div>
+
+      <div>
+        <div class="metric-label" style="margin-bottom:4px;">LIVE TERMINAL / RECENT LOGS</div>
+        <div class="terminal-box" id="drawer-logs">No execution logs yet.</div>
+      </div>
+
+      <div>
+        <div class="metric-label" style="margin-bottom:4px;">LATEST FINDINGS</div>
+        <div class="terminal-box" id="drawer-findings" style="color:var(--success);">No findings synthesized.</div>
+      </div>
+
+      <div style="margin-top:auto; display:flex; gap:8px;">
+        <button class="btn" style="flex:1;" id="drawer-pause-btn" onclick="togglePause()">Pause</button>
+        <button class="btn" style="flex:1; border-color:var(--accent); color:var(--accent);" onclick="stopDot()">Stop</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spawn Agent Modal -->
+  <div id="spawn-modal">
+    <div class="modal-box">
+      <div style="font-family:'Orbitron', sans-serif; font-size:1.1rem; color:var(--primary);">Spawn Autonomous Dot</div>
+      <div>
+        <label class="metric-label">AGENT NAME</label>
+        <input class="input-field" id="new-dot-name" placeholder="e.g. ResearchDot, CoderAgent">
+      </div>
+      <div>
+        <label class="metric-label">OBJECTIVE / GOAL</label>
+        <textarea class="input-field" id="new-dot-goal" rows="3" placeholder="Perform deep code analysis, search latest arXiv papers..."></textarea>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <button class="btn" onclick="closeSpawnModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmSpawnDot()">Deploy Agent</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('floor-canvas');
+    const ctx = canvas.getContext('2d');
+    const envelopeLayer = document.getElementById('envelope-layer');
+
+    let officeState = { dots: [], flights: [], telemetry: {} };
+    let selectedDotId = null;
+    let deskLayouts = [];
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+      drawOffice();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // Compute Desk Positions
+    function computeDeskLayout(dots) {
+      deskLayouts = [];
+      const cw = canvas.width;
+      const ch = canvas.height;
+
+      // Michael / Prime Commander Room at Top Center
+      const commanderDesk = {
+        id: 'commander',
+        name: 'Prime Commander',
+        role: 'GOD Orchestrator',
+        status: 'online',
+        x: cw / 2,
+        y: 110,
+        width: 140,
+        height: 70,
+        isCommander: true,
+      };
+      deskLayouts.push(commanderDesk);
+
+      // Grid of agent desks on floor
+      const count = dots.length;
+      const cols = Math.max(3, Math.min(6, Math.ceil(Math.sqrt(count * 1.5))));
+      const startY = 220;
+      const spacingX = Math.min(220, (cw - 160) / cols);
+      const spacingY = 150;
+      const startX = (cw - (cols - 1) * spacingX) / 2;
+
+      dots.forEach((dot, idx) => {
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        deskLayouts.push({
+          id: dot.dot_id,
+          dot: dot,
+          name: dot.name,
+          status: dot.status,
+          x: startX + col * spacingX,
+          y: startY + row * spacingY,
+          width: 120,
+          height: 60,
+          isCommander: false,
+        });
+      });
+    }
+
+    // Render 2D Office Floor
+    function drawOffice() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 1. Draw Tile Grid
+      ctx.strokeStyle = '#121726';
+      ctx.lineWidth = 1;
+      const gridSize = 40;
+      for (let x = 0; x < canvas.width; x += gridSize) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += gridSize) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+      }
+
+      // 2. Draw Commander Office Boundary
+      const cw = canvas.width;
+      ctx.save();
+      ctx.strokeStyle = '#00f3ff33';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.strokeRect(cw / 2 - 180, 40, 360, 140);
+      ctx.restore();
+
+      ctx.fillStyle = '#00f3ff88';
+      ctx.font = '10px "Orbitron", sans-serif';
+      ctx.fillText("MICHAEL / PRIME COMMANDER ROOM", cw / 2 - 120, 58);
+
+      // 3. Draw Desks & Avatars
+      deskLayouts.forEach(desk => {
+        drawDesk(desk);
+      });
+    }
+
+    function drawDesk(desk) {
+      const isSelected = selectedDotId && desk.id === selectedDotId;
+      const { x, y, width, height, isCommander, status, name } = desk;
+      const halfW = width / 2;
+      const halfH = height / 2;
+
+      // Status colors
+      let statusColor = '#00f3ff';
+      if (status === 'running') statusColor = '#00ff88';
+      else if (status === 'waiting_approval') statusColor = '#ffb800';
+      else if (status === 'paused') statusColor = '#73819c';
+      else if (status === 'stopped' || status === 'failed') statusColor = '#ff0055';
+
+      // Desk Surface Shadow & Box
+      ctx.save();
+      ctx.shadowColor = isSelected ? statusColor : 'rgba(0, 0, 0, 0.5)';
+      ctx.shadowBlur = isSelected ? 20 : 10;
+
+      ctx.fillStyle = isCommander ? '#182033' : '#141824';
+      ctx.strokeStyle = isSelected ? statusColor : (isCommander ? '#00f3ff66' : '#232b42');
+      ctx.lineWidth = isSelected ? 2 : 1;
+
+      ctx.beginPath();
+      ctx.roundRect(x - halfW, y - halfH, width, height, 6);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // Monitor Screen on Desk
+      ctx.fillStyle = status === 'running' ? '#0a2e22' : '#0b1626';
+      ctx.strokeStyle = statusColor;
+      ctx.lineWidth = 1;
+      ctx.fillRect(x - 24, y - halfH + 6, 48, 14);
+      ctx.strokeRect(x - 24, y - halfH + 6, 48, 14);
+
+      // Keyboard
+      ctx.fillStyle = '#22293d';
+      ctx.fillRect(x - 16, y - halfH + 24, 32, 8);
+
+      // Pixel Character Sitting behind desk (Avatar)
+      drawAvatar(x, y - halfH - 12, isCommander ? '#ff0055' : statusColor);
+
+      // Status indicator light on desk
+      ctx.fillStyle = statusColor;
+      ctx.beginPath();
+      ctx.arc(x + halfW - 12, y - halfH + 12, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Desk Label / Name
+      ctx.fillStyle = isSelected ? '#fff' : '#b8c5db';
+      ctx.font = '11px "Fira Code", monospace';
+      ctx.textAlign = 'center';
+      const label = name.length > 14 ? name.substring(0, 12) + '..' : name;
+      ctx.fillText(label, x, y + halfH + 16);
+
+      // Status Tag
+      ctx.fillStyle = statusColor;
+      ctx.font = '9px "Fira Code", monospace';
+      ctx.fillText((status || 'active').toUpperCase(), x, y + halfH + 28);
+    }
+
+    function drawAvatar(x, y, color) {
+      ctx.save();
+      // Head
+      ctx.fillStyle = '#f3c79e';
+      ctx.fillRect(x - 8, y - 8, 16, 16);
+      // Hair / Hat
+      ctx.fillStyle = color;
+      ctx.fillRect(x - 9, y - 12, 18, 6);
+      // Eyes
+      ctx.fillStyle = '#111';
+      ctx.fillRect(x - 4, y - 2, 2, 2);
+      ctx.fillRect(x + 2, y - 2, 2, 2);
+      // Body / Suit
+      ctx.fillStyle = color;
+      ctx.fillRect(x - 10, y + 8, 20, 14);
+      ctx.restore();
+    }
+
+    // Trigger visual envelope flight between desks
+    function triggerEnvelopeFlight(flight) {
+      const senderDesk = deskLayouts.find(d => d.id === flight.sender) || deskLayouts[0];
+      const recipientDesk = deskLayouts.find(d => d.id === flight.recipient) || deskLayouts[0];
+
+      if (!senderDesk || !recipientDesk) return;
+
+      const env = document.createElement('div');
+      env.className = 'envelope';
+      env.innerText = '✉️';
+      env.style.left = `${senderDesk.x}px`;
+      env.style.top = `${senderDesk.y}px`;
+      envelopeLayer.appendChild(env);
+
+      requestAnimationFrame(() => {
+        env.style.left = `${recipientDesk.x}px`;
+        env.style.top = `${recipientDesk.y}px`;
+      });
+
+      setTimeout(() => {
+        if (env.parentElement) env.remove();
+      }, 2000);
+    }
+
+    let seenFlightIds = new Set();
+
+    // Fetch live state from backend
+    async function fetchOfficeState() {
+      try {
+        const resp = await fetch('/api/office/state');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        officeState = data;
+
+        computeDeskLayout(data.dots || []);
+        drawOffice();
+
+        // Check for new envelope flights
+        if (data.flights && data.flights.length > 0) {
+          data.flights.forEach(f => {
+            if (!seenFlightIds.has(f.id)) {
+              seenFlightIds.add(f.id);
+              triggerEnvelopeFlight(f);
+            }
+          });
+        }
+
+        // Update Stapler button state
+        if (data.stapler) {
+          const sLabel = document.getElementById('stapler-state');
+          sLabel.innerText = data.stapler.enabled ? '[ACTIVE]' : '[OFF]';
+          document.getElementById('stapler-btn').style.borderColor = data.stapler.enabled ? '#00ff88' : '#ffb800';
+        }
+
+        // Refresh drawer if open
+        if (selectedDotId) {
+          const curDot = (data.dots || []).find(d => d.dot_id === selectedDotId);
+          if (curDot) renderDrawer(curDot);
+        }
+
+      } catch (err) {
+        console.error('Failed to poll office state:', err);
+      }
+    }
+
+    // Canvas Click Listener for Desks
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      let clicked = null;
+      deskLayouts.forEach(desk => {
+        const halfW = desk.width / 2;
+        const halfH = desk.height / 2;
+        if (
+          mouseX >= desk.x - halfW && mouseX <= desk.x + halfW &&
+          mouseY >= desk.y - halfH && mouseY <= desk.y + halfH
+        ) {
+          clicked = desk;
+        }
+      });
+
+      if (clicked && !clicked.isCommander) {
+        selectedDotId = clicked.id;
+        renderDrawer(clicked.dot);
+        document.getElementById('drawer').classList.add('open');
+        drawOffice();
+      } else if (!clicked) {
+        closeDrawer();
+      }
+    });
+
+    function renderDrawer(dot) {
+      if (!dot) return;
+      document.getElementById('drawer-name').innerText = dot.name;
+      document.getElementById('drawer-id').innerText = dot.dot_id;
+      document.getElementById('drawer-status').innerText = (dot.status || 'idle').toUpperCase();
+      document.getElementById('drawer-inbox').innerText = `${dot.unread_inbox || 0} msgs`;
+      document.getElementById('drawer-goal').innerText = dot.goal;
+
+      // Approval Zone
+      const appZone = document.getElementById('drawer-approval-zone');
+      if (dot.status === 'waiting_approval' && dot.pending_approval) {
+        appZone.style.display = 'block';
+        document.getElementById('drawer-approval-reason').innerText = dot.pending_approval.reason || 'Action gated by safety policy.';
+      } else {
+        appZone.style.display = 'none';
+      }
+
+      // Logs
+      const logs = dot.logs || [];
+      document.getElementById('drawer-logs').innerHTML = logs.slice(-8).map(l => `<div>${l}</div>`).join('') || 'Awaiting execution.';
+
+      // Findings
+      const findings = dot.findings || [];
+      document.getElementById('drawer-findings').innerHTML = findings.map(f => `<div>• ${f}</div>`).join('') || 'No findings recorded yet.';
+
+      document.getElementById('drawer-pause-btn').innerText = dot.status === 'paused' ? 'Resume' : 'Pause';
+    }
+
+    function closeDrawer() {
+      selectedDotId = null;
+      document.getElementById('drawer').classList.remove('open');
+      drawOffice();
+    }
+
+    async function togglePause() {
+      if (!selectedDotId) return;
+      const dot = (officeState.dots || []).find(d => d.dot_id === selectedDotId);
+      const action = dot.status === 'paused' ? 'resume' : 'pause';
+      await fetch('/api/dots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action, dot_id: selectedDotId })
+      });
+      fetchOfficeState();
+    }
+
+    async function stopDot() {
+      if (!selectedDotId) return;
+      await fetch('/api/dots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'stop', dot_id: selectedDotId })
+      });
+      fetchOfficeState();
+    }
+
+    async function resolveApproval(approved) {
+      if (!selectedDotId) return;
+      await fetch('/api/dots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: approved ? 'approve' : 'reject', dot_id: selectedDotId })
+      });
+      fetchOfficeState();
+    }
+
+    async function toggleStapler() {
+      await fetch('/api/stapler', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggle' })
+      });
+      fetchOfficeState();
+    }
+
+    function openSpawnModal() {
+      document.getElementById('spawn-modal').classList.add('active');
+    }
+    function closeSpawnModal() {
+      document.getElementById('spawn-modal').classList.remove('active');
+    }
+    async function confirmSpawnDot() {
+      const name = document.getElementById('new-dot-name').value.trim();
+      const goal = document.getElementById('new-dot-goal').value.trim();
+      if (!goal) return alert("Please specify a goal!");
+
+      await fetch('/api/dots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'spawn', name: name || undefined, goal: goal })
+      });
+      closeSpawnModal();
+      document.getElementById('new-dot-name').value = '';
+      document.getElementById('new-dot-goal').value = '';
+      fetchOfficeState();
+    }
+
+    // Init & Polling
+    resizeCanvas();
+    fetchOfficeState();
+    setInterval(fetchOfficeState, 2000);
+  </script>
+</body>
+</html>
