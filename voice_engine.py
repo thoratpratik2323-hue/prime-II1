@@ -325,15 +325,19 @@ class VoiceEngine:
                         played = loop.run_until_complete(self._speak_edge_tts(text, edge_voice))
 
                     # 5. Final Fallback: Offline pyttsx3 (Microsoft David)
-                    if not played:
+                    # IMPORTANT: Only fall back if TTS genuinely failed, NOT if user aborted via barge-in.
+                    # Edge-TTS returns False on abort, which is NOT a failure — it means "stop talking".
+                    if not played and not self._abort_utterance.is_set():
                         self._speak_pyttsx3_male(text)
 
                 except Exception as e:
                     log.warning("TTS pipeline error: %s. Falling back to pyttsx3", e)
-                    try:
-                        self._speak_pyttsx3_male(text)
-                    except Exception:
-                        pass
+                    # Only fall back to offline voice if the error wasn't caused by an abort
+                    if not self._abort_utterance.is_set():
+                        try:
+                            self._speak_pyttsx3_male(text)
+                        except Exception:
+                            pass
                 finally:
                     self._is_speaking = False
                     self.tts_queue.task_done()
@@ -636,10 +640,8 @@ class VoiceEngine:
             return
         clean_text = self._sanitize_for_tts(str(text))
         if clean_text:
-            # Check audio cache first
-            if clean_text in self._audio_cache:
-                self._play_cached_audio(clean_text)
-                return
+            # Cached audio phrases still go through the queue to avoid racing the worker
+            # thread over the global audio stream (sounddevice/pygame mixer).
 
             if split_sentences:
                 sentences = re.split(r'(?<=[.!?\n])\s+', clean_text)

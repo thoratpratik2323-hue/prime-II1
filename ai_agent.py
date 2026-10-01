@@ -10,6 +10,7 @@ import json
 import logging
 import re
 import time
+import threading
 from typing import Any, Callable, Dict, List, Optional
 
 from config import config
@@ -78,6 +79,7 @@ TOOL_ACKS = {
 class AIAgent:
     def __init__(self):
         self.history: List[Dict[str, Any]] = []
+        self._process_lock = threading.RLock()
         self._gemini_chat = None
         self._gemini_client = None
         self._openai_client = None
@@ -234,14 +236,19 @@ class AIAgent:
             from actions.friday_policy import check_action_policy
             policy = check_action_policy(fn_name, fn_args)
             if policy.get("status") in ("GATED", "APPROVAL_REQUIRED") or policy.get("approval_required"):
+                log.info("Action '%s' gated by safety policy: %s", fn_name, policy.get('reason'))
                 return {
                     "ok": False,
-                    "error": f"Action '{fn_name}' GATED by Safety Policy: {policy.get('reason')}. Approval token: {policy.get('approval_token')}. Please ask operator for explicit confirmation before running.",
+                    "error": f"Action '{fn_name}' GATED by Safety Policy: {policy.get('reason')}. Please ask operator for explicit spoken confirmation before running.",
                     "gated": True,
-                    "approval_token": policy.get("approval_token"),
                 }
-        except Exception:
-            pass
+        except Exception as policy_err:
+            log.warning("Safety policy check failed for '%s': %s. Blocking action (fail-closed).", fn_name, policy_err)
+            return {
+                "ok": False,
+                "error": f"Action '{fn_name}' blocked: safety policy check encountered an error. Please retry or contact operator.",
+                "gated": True,
+            }
 
         # 2. Pre-state snapshot capture for file/terminal mutations
         receipt_action = None
@@ -282,6 +289,15 @@ class AIAgent:
         Process user message and return the final response string.
         Executes any requested tools in the loop.
         """
+        with self._process_lock:
+            return self._process_message_impl(user_input, on_tool_call, on_tool_result)
+
+    def _process_message_impl(
+        self,
+        user_input: str,
+        on_tool_call: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        on_tool_result: Optional[Callable[[str, Any], None]] = None,
+    ) -> str:
         user_input = (user_input or "").strip()
         if not user_input:
             return ""
@@ -355,7 +371,14 @@ class AIAgent:
 
             if self._openai_client is not None:
                 log.info("Gemini exhausted/timed-out. Falling back instantly to ultra-fast provider...")
-                res = self._process_openai_compatible(user_input, on_tool_call, logged_tool_result)
+                # If Gemini already executed tools before failing, include results to prevent re-execution
+                failover_input = user_input
+                prior_tools = getattr(self, '_last_gemini_tool_results', [])
+                if prior_tools:
+                    tool_summary = "; ".join(f"{t['tool']}→{str(t['result'])[:200]}" for t in prior_tools)
+                    failover_input = f"{user_input}\n\n[SYSTEM: The following tools were already executed this turn. Do NOT re-execute them. Use the results directly.]\n{tool_summary}"
+                    self._last_gemini_tool_results = []  # Clear after use
+                res = self._process_openai_compatible(failover_input, on_tool_call, logged_tool_result)
                 if res and not res.startswith("Network connection unreachable"):
                     trace_logger.end_trace(active_trace, response=res)
                     self._record_memory_turn(user_input, res)
@@ -395,6 +418,8 @@ class AIAgent:
         on_tool_result: Optional[Callable[[str, Any], None]],
     ) -> str:
         from google.genai import types
+        
+        executed_tool_results = []  # Track tools executed this turn for idempotent failover
 
         try:
             resp = self._gemini_chat.send_message(user_input)
@@ -423,6 +448,7 @@ class AIAgent:
                         voice.speak(TOOL_ACKS[fn_name])
 
                     exec_res = self._intercept_and_execute_tool(fn_name, fn_args)
+                    executed_tool_results.append({"tool": fn_name, "args": fn_args, "result": exec_res})
                     if on_tool_result:
                         on_tool_result(fn_name, exec_res)
 
@@ -488,6 +514,7 @@ class AIAgent:
 
             # Gemini models exhausted or timed out
             log.info("Gemini exhausted/timed-out. Routing to ultra-fast provider fallback...")
+            self._last_gemini_tool_results = executed_tool_results
             return "__GEMINI_EXHAUSTED__"
 
     def _process_openai_compatible(

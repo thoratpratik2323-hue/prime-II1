@@ -64,7 +64,9 @@ class TestSystemUpgrades(unittest.TestCase):
         )
         self.assertFalse(res.get("ok"))
         self.assertTrue(res.get("gated"))
-        self.assertIn("approval_token", res)
+        # approval_token is intentionally NOT returned to prevent LLM context leakage (P0 security fix)
+        self.assertNotIn("approval_token", res, "approval_token must not leak into LLM-facing response dict")
+        self.assertNotIn("Approval token:", res.get("error", ""), "approval_token must not appear in error string")
         self.assertIn("GATED by Safety Policy", res.get("error", ""))
 
     def test_safety_interceptor_records_receipt(self):
