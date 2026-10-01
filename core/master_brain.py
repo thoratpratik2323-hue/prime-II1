@@ -416,10 +416,23 @@ class PrimeMasterBrain:
         except Exception:
             pass
 
-        # 4. Contextual RAG Retrieval (If prompt refers to specific project/architecture)
+        # 4. Active Prime Dots (Background Autonomous Pods)
+        try:
+            from core.prime_dots import dot_engine
+            active_dots = dot_engine.list_dots(active_only=True)
+            if active_dots:
+                dot_lines = ["[Active Prime Dots (Background Autonomous Pods)]"]
+                for d in active_dots[:4]:
+                    approval_tag = " [⚠️ WAITING OPERATOR APPROVAL]" if d.get("pending_approval") else ""
+                    dot_lines.append(f"- 🟣 {d['name']} ({d['dot_id']}): Goal='{d['goal']}' | Status={d['status'].upper()}{approval_tag} (Iteration #{d['iteration_count']})")
+                blocks.append("\n".join(dot_lines))
+        except Exception:
+            pass
+
+        # 5. Contextual RAG Retrieval (If prompt refers to specific project/architecture)
         if user_prompt and len(user_prompt) > 8:
             keywords = [w for w in re.findall(r"\b[a-zA-Z]{4,}\b", user_prompt.lower()) if w not in ("please", "should", "could", "would", "about")]
-            if any(k in user_prompt.lower() for k in ("architecture", "database", "agent", "tool", "obsidian", "devlog", "decision", "project", "plan", "memory")):
+            if any(k in user_prompt.lower() for k in ("architecture", "database", "agent", "tool", "obsidian", "devlog", "decision", "project", "plan", "memory", "dot", "dots")):
                 try:
                     rag_res = self.recall(user_prompt, top_k=2, mode="hybrid")
                     if rag_res.get("results"):
@@ -521,6 +534,14 @@ class PrimeMasterBrain:
         except Exception:
             pass
 
+        # 4. Prime Dots count
+        dots_telemetry = {"total_dots": 0, "running_dots": 0}
+        try:
+            from core.prime_dots import dot_engine
+            dots_telemetry = dot_engine.get_telemetry()
+        except Exception:
+            pass
+
         return {
             "ok": True,
             "master_brain_status": "ONLINE",
@@ -534,6 +555,7 @@ class PrimeMasterBrain:
             },
             "durable_task_plans": plans_count,
             "cryptographic_receipts": receipts_count,
+            "prime_dots": dots_telemetry,
             "last_consolidation_ts": self._last_consolidation,
         }
 

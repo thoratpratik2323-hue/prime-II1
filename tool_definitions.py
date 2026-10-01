@@ -1520,6 +1520,54 @@ TOOL_SPECS: List[Dict[str, Any]] = [
         "name": "getCollagentStatus",
         "description": "Get overall Collagent protocol status, API/EVM connectivity, active problem charters, and escrow totals.",
         "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    # Prime Dots Autonomous Background Daemon Suite (Inspired by OpenAI Dots)
+    {
+        "name": "spawnPrimeDot",
+        "description": "Spawn an autonomous, persistent 24/7 background AI agent (Dot) to execute a goal independently in its own sandbox with live Obsidian Second Brain canvas sync.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "goal": {"type": "string", "description": "The high-level objective or recurring mission for the Dot."},
+                "name": {"type": "string", "description": "Optional friendly name for the Dot (e.g. 'Security Sentry', 'Bug Fixer')."},
+                "interval_seconds": {"type": "integer", "description": "Recurrence interval in seconds (0 for one-shot goal, >0 for recurring daemon)."}
+            },
+            "required": ["goal"]
+        }
+    },
+    {
+        "name": "listPrimeDots",
+        "description": "List all registered and running Prime Dots with their goals, execution progress, iterations, and approval states.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "active_only": {"type": "boolean", "description": "If true, only returns active running or waiting dots."}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "controlPrimeDot",
+        "description": "Control an autonomous Prime Dot: pause, resume, stop, or approve/reject pending safety-gated actions.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "dot_id": {"type": "string", "description": "The target Dot ID (e.g. 'dot_008c0c41')."},
+                "action": {"type": "string", "enum": ["pause", "resume", "stop", "approve", "reject"], "description": "Action to perform on the Dot."}
+            },
+            "required": ["dot_id", "action"]
+        }
+    },
+    {
+        "name": "readDotCanvas",
+        "description": "Read the live Obsidian Second Brain canvas Markdown page of a Prime Dot, containing its live findings, deliverables, and execution journey.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "dot_id": {"type": "string", "description": "The Dot ID whose canvas to read."}
+            },
+            "required": ["dot_id"]
+        }
     }
 ]
 
@@ -2684,8 +2732,78 @@ def _handle_get_collagent_status(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": f"getCollagentStatus error: {e}"}
 
 
+def _handle_spawn_prime_dot(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.prime_dots import dot_engine
+        goal = args.get("goal") or args.get("objective") or ""
+        name = args.get("name")
+        interval = int(args.get("interval_seconds") or 0)
+        return dot_engine.spawn_dot(goal=goal, name=name, interval_seconds=interval)
+    except Exception as e:
+        return {"ok": False, "error": f"spawnPrimeDot error: {e}"}
+
+
+def _handle_list_prime_dots(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.prime_dots import dot_engine
+        active_only = bool(args.get("active_only", False))
+        dots = dot_engine.list_dots(active_only=active_only)
+        telemetry = dot_engine.get_telemetry()
+        return {"ok": True, "count": len(dots), "dots": dots, "telemetry": telemetry}
+    except Exception as e:
+        return {"ok": False, "error": f"listPrimeDots error: {e}"}
+
+
+
+def _handle_control_prime_dot(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.prime_dots import dot_engine
+        dot_id = str(args.get("dot_id") or "").strip()
+        action = str(args.get("action") or "").lower().strip()
+        if not dot_id or not action:
+            return {"ok": False, "error": "dot_id and action are required."}
+
+        if action == "pause":
+            ok = dot_engine.pause_dot(dot_id)
+            return {"ok": ok, "message": f"Dot {dot_id} {'paused' if ok else 'failed to pause'}."}
+        elif action == "resume":
+            ok = dot_engine.resume_dot(dot_id)
+            return {"ok": ok, "message": f"Dot {dot_id} {'resumed' if ok else 'failed to resume'}."}
+        elif action == "stop":
+            ok = dot_engine.stop_dot(dot_id)
+            return {"ok": ok, "message": f"Dot {dot_id} {'stopped' if ok else 'failed to stop'}."}
+        elif action in ("approve", "allow", "yes"):
+            ok = dot_engine.approve_dot_action(dot_id, approved=True)
+            return {"ok": ok, "message": f"Action for Dot {dot_id} {'approved' if ok else 'failed to approve'}."}
+        elif action in ("reject", "deny", "no"):
+            ok = dot_engine.approve_dot_action(dot_id, approved=False)
+            return {"ok": ok, "message": f"Action for Dot {dot_id} {'rejected' if ok else 'failed to reject'}."}
+        return {"ok": False, "error": f"Unknown action: {action}"}
+    except Exception as e:
+        return {"ok": False, "error": f"controlPrimeDot error: {e}"}
+
+
+def _handle_read_dot_canvas(args: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        from core.prime_dots import dot_engine
+        dot_id = str(args.get("dot_id") or "").strip()
+        dot = dot_engine.get_dot(dot_id)
+        if not dot:
+            return {"ok": False, "error": f"Dot '{dot_id}' not found."}
+        content = dot.get_canvas_content()
+        return {"ok": True, "dot_id": dot_id, "name": dot.name, "goal": dot.goal, "canvas_content": content}
+    except Exception as e:
+        return {"ok": False, "error": f"readDotCanvas error: {e}"}
+
+
+
 
 BUILTIN_TOOL_DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
+    # Prime Dots Autonomous Background Daemon Suite
+    "spawnPrimeDot": _handle_spawn_prime_dot,
+    "listPrimeDots": _handle_list_prime_dots,
+    "controlPrimeDot": _handle_control_prime_dot,
+    "readDotCanvas": _handle_read_dot_canvas,
     "getCurrentTime": _handle_time,
     "getTime": _handle_time,
     "currentTime": _handle_time,

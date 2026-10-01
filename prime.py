@@ -449,6 +449,50 @@ def ping_active_provider():
         voice.tts_enabled = orig_tts
 
 
+def print_dots_table():
+    """Display registered and active Prime Dots daemon pods."""
+    from core.prime_dots import dot_engine
+    dots = dot_engine.list_dots()
+    telemetry = dot_engine.get_telemetry()
+
+    table = Table(
+        title=f"🟣 PRIME DOTS :: AUTONOMOUS BACKGROUND AGENTS ({telemetry['running_dots']} Running / {telemetry['total_dots']} Total)",
+        border_style="bright_magenta",
+        header_style="bold bright_magenta"
+    )
+    table.add_column("Dot ID", style="bold cyan", width=14)
+    table.add_column("Agent Name", style="bold bright_white", width=22)
+    table.add_column("Status", width=18)
+    table.add_column("Iters", justify="center", width=7)
+    table.add_column("Primary Objective / Goal", style="dim white")
+
+    status_styles = {
+        "running": "[bold bright_green]● RUNNING[/bold bright_green]",
+        "paused": "[bold yellow]⏸ PAUSED[/bold yellow]",
+        "waiting_approval": "[bold blink bright_red]⚠ APPROVAL REQ[/bold blink bright_red]",
+        "completed": "[bold green]✓ COMPLETED[/bold green]",
+        "stopped": "[dim]⏹ STOPPED[/dim]",
+        "failed": "[bold red]✗ FAILED[/bold red]",
+        "idle": "[dim]○ IDLE[/dim]",
+    }
+
+    if not dots:
+        table.add_row("-", "No Dots registered", "[dim]IDLE[/dim]", "0", "Use /dots spawn <goal> to launch an autonomous agent.")
+    else:
+        for d in dots:
+            st = status_styles.get(d["status"], d["status"].upper())
+            table.add_row(
+                d["dot_id"],
+                d["name"][:20],
+                st,
+                str(d["iteration_count"]),
+                d["goal"][:55]
+            )
+
+    console.print(table)
+    console.print("[dim magenta]Commands: [bold bright_white]/dots spawn <goal>[/bold bright_white] | [bold bright_white]/dots pause <id>[/bold bright_white] | [bold bright_white]/dots resume <id>[/bold bright_white] | [bold bright_white]/dots stop <id>[/bold bright_white] | [bold bright_white]/dots view <id>[/bold bright_white][/dim magenta]\n")
+
+
 def print_stats():
     """Display session performance stats."""
     uptime_sec = int(time.time() - SESSION_START)
@@ -802,7 +846,7 @@ def main():
             "help", "menu", "tools", "hud", "stats", "providers", "ping", "system",
             "briefing", "notes", "git", "agents", "personas", "goal", "lessons", "voice",
             "listen", "weather", "speak", "clear", "cls", "autostart", "wakeword",
-            "operator", "traces", "mcp"
+            "operator", "traces", "mcp", "dots"
         ):
             cmd_lower = "/" + cmd_lower
 
@@ -990,6 +1034,67 @@ def main():
             for l in lessons:
                 t.add_row(str(l.get("id", "-")), l.get("topic", ""), l.get("insight", ""))
             console.print(t)
+
+        elif cmd_lower.startswith("/dots"):
+            from core.prime_dots import dot_engine
+            parts = user_input.split(maxsplit=2)
+            subcmd = parts[1].lower().strip() if len(parts) > 1 else "list"
+            arg = parts[2].strip() if len(parts) > 2 else ""
+
+            if subcmd in ("list", "ls", "status"):
+                print_dots_table()
+            elif subcmd in ("spawn", "create", "start", "run", "new"):
+                if not arg:
+                    console.print("[yellow]Usage: /dots spawn <goal description>[/yellow]")
+                else:
+                    res = dot_engine.spawn_dot(goal=arg)
+                    console.print(f"[bold bright_green]✓ {res['message']}[/bold bright_green]")
+                    console.print(f"[dim magenta]Canvas Page synced at: {res['dot']['canvas_file']}[/dim magenta]")
+            elif subcmd == "pause":
+                if not arg:
+                    console.print("[yellow]Usage: /dots pause <dot_id>[/yellow]")
+                else:
+                    ok = dot_engine.pause_dot(arg)
+                    console.print(f"[{'green' if ok else 'red'}]● Dot {arg} {'paused' if ok else 'failed to pause'}[/{'green' if ok else 'red'}]")
+            elif subcmd == "resume":
+                if not arg:
+                    console.print("[yellow]Usage: /dots resume <dot_id>[/yellow]")
+                else:
+                    ok = dot_engine.resume_dot(arg)
+                    console.print(f"[{'green' if ok else 'red'}]● Dot {arg} {'resumed' if ok else 'failed to resume'}[/{'green' if ok else 'red'}]")
+            elif subcmd in ("stop", "kill"):
+                if not arg:
+                    console.print("[yellow]Usage: /dots stop <dot_id>[/yellow]")
+                else:
+                    ok = dot_engine.stop_dot(arg)
+                    console.print(f"[{'green' if ok else 'red'}]● Dot {arg} {'stopped' if ok else 'failed to stop'}[/{'green' if ok else 'red'}]")
+            elif subcmd in ("approve", "allow", "yes"):
+                if not arg:
+                    console.print("[yellow]Usage: /dots approve <dot_id>[/yellow]")
+                else:
+                    ok = dot_engine.approve_dot_action(arg, approved=True)
+                    console.print(f"[{'green' if ok else 'red'}]● Dot {arg} action {'approved' if ok else 'failed to approve'}[/{'green' if ok else 'red'}]")
+            elif subcmd in ("reject", "deny", "no"):
+                if not arg:
+                    console.print("[yellow]Usage: /dots reject <dot_id>[/yellow]")
+                else:
+                    ok = dot_engine.approve_dot_action(arg, approved=False)
+                    console.print(f"[{'green' if ok else 'red'}]● Dot {arg} action {'rejected' if ok else 'failed to reject'}[/{'green' if ok else 'red'}]")
+            elif subcmd in ("view", "canvas", "cat", "page"):
+                if not arg:
+                    console.print("[yellow]Usage: /dots view <dot_id>[/yellow]")
+                else:
+                    dot = dot_engine.get_dot(arg)
+                    if not dot:
+                        console.print(f"[red]Dot '{arg}' not found.[/red]")
+                    elif dot.canvas_file.exists():
+                        with open(dot.canvas_file, "r", encoding="utf-8") as f:
+                            content = f.read()
+                        console.print(Panel(content, title=f"[bold magenta]🟣 {dot.name} Canvas[/bold magenta]", border_style="magenta"))
+                    else:
+                        console.print(f"[yellow]Canvas file for '{arg}' not found.[/yellow]")
+            else:
+                print_dots_table()
 
         elif cmd_lower.startswith("/weather"):
             parts = user_input.split(maxsplit=1)

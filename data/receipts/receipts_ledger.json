@@ -183,5 +183,22 @@
       "error": null
     },
     "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_65dc6af5d5",
+    "timestamp": "2026-10-01T18:26:33.806471",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
   }
 ]

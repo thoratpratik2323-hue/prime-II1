@@ -304,9 +304,18 @@ def api_hud_state():
 
     # 4. User Preferences Memory (via Master Brain)
     preferences_count = 0
+    dots_telemetry = {}
+    running_dots = []
     try:
         from core.master_brain import prime_brain
         preferences_count = len(prime_brain._ram_cache)
+    except Exception:
+        pass
+
+    try:
+        from core.prime_dots import dot_engine
+        dots_telemetry = dot_engine.get_telemetry()
+        running_dots = [d for d in dot_engine.list_dots() if d.get("status") in ("running", "waiting_approval")]
     except Exception:
         pass
 
@@ -326,10 +335,12 @@ def api_hud_state():
             "tools_count": len(TOOL_SPECS),
             "operator": "Pratik Thorat",
             "preferences_count": preferences_count,
+            "dots_telemetry": dots_telemetry,
         },
         "visualizer": visualizer_data,
         "active_plan": active_plan,
         "recent_receipts": recent_receipts,
+        "active_dots": running_dots,
     })
 
 
@@ -342,6 +353,7 @@ def api_hud_stream():
             from actions.her_companion import get_her_visualizer_state
             from actions.friday_tasks import get_active_task_plan
             from actions.friday_receipts import get_execution_receipts
+            from core.prime_dots import dot_engine
             from config import config
             from tool_definitions import TOOL_SPECS
 
@@ -352,6 +364,10 @@ def api_hud_stream():
                 plan_res = get_active_task_plan()
                 active_plan = plan_res.get("plan") if plan_res.get("has_active_plan") else None
                 rec_res = get_execution_receipts(limit=3)
+                try:
+                    dots_telemetry = dot_engine.get_telemetry()
+                except Exception:
+                    dots_telemetry = {}
 
                 payload = {
                     "type": "hud_tick",
@@ -361,6 +377,7 @@ def api_hud_stream():
                     "visualizer": vis,
                     "active_plan": active_plan,
                     "recent_receipts": rec_res.get("receipts", []),
+                    "dots_telemetry": dots_telemetry,
                     "tools_count": len(TOOL_SPECS),
                     "provider": config.get_active_provider(),
                 }
@@ -372,6 +389,68 @@ def api_hud_stream():
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
     return Response(stream_with_context(hud_event_stream()), mimetype="text/event-stream")
+
+
+@app.route("/api/dots", methods=["GET", "POST"])
+def api_dots():
+    """
+    Prime Dots Mobile API:
+    GET: returns all registered dots and telemetry summary.
+    POST: allows spawning, pausing, resuming, stopping, or approving background dots.
+    """
+    from core.prime_dots import dot_engine
+
+    if request.method == "GET":
+        dots = dot_engine.list_dots()
+        telemetry = dot_engine.get_telemetry()
+        return jsonify({
+            "ok": True,
+            "telemetry": telemetry,
+            "dots": dots,
+        })
+
+    data = request.get_json(force=True, silent=True) or {}
+    action = data.get("action", "").lower().strip()
+    dot_id = data.get("dot_id", "").strip()
+
+    if action == "spawn":
+        goal = data.get("goal", "").strip()
+        if not goal:
+            return jsonify({"ok": False, "error": "Goal is required to spawn a Dot."}), 400
+        name = data.get("name")
+        interval = int(data.get("interval_seconds", 0))
+        res = dot_engine.spawn_dot(goal=goal, name=name, interval_seconds=interval)
+        return jsonify(res)
+
+    if not dot_id:
+        return jsonify({"ok": False, "error": "dot_id is required for this action."}), 400
+
+    if action == "pause":
+        ok = dot_engine.pause_dot(dot_id)
+        return jsonify({"ok": ok, "message": f"Dot {dot_id} paused." if ok else f"Dot {dot_id} not found."})
+
+    elif action == "resume":
+        ok = dot_engine.resume_dot(dot_id)
+        return jsonify({"ok": ok, "message": f"Dot {dot_id} resumed." if ok else f"Dot {dot_id} not found."})
+
+    elif action == "stop":
+        ok = dot_engine.stop_dot(dot_id)
+        return jsonify({"ok": ok, "message": f"Dot {dot_id} stopped." if ok else f"Dot {dot_id} not found."})
+
+    elif action in ("approve", "reject"):
+        approved = (action == "approve")
+        ok = dot_engine.approve_dot_action(dot_id, approved=approved)
+        return jsonify({"ok": ok, "message": f"Action for {dot_id} {'approved' if approved else 'rejected'}." if ok else f"Dot {dot_id} not found."})
+
+    elif action in ("read_canvas", "canvas"):
+        dot = dot_engine.get_dot(dot_id)
+        if not dot:
+            return jsonify({"ok": False, "error": f"Dot {dot_id} not found."}), 404
+        content = dot.get_canvas_content()
+        return jsonify({"ok": True, "dot_id": dot_id, "canvas": content})
+
+    return jsonify({"ok": False, "error": f"Unknown action: '{action}'"}), 400
+
 
 
 def run_server(port: int = 8765):
