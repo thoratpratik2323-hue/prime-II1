@@ -171,25 +171,43 @@ class StaplerDictationEngine:
         old_clipboard = ""
         has_old = False
         try:
-            win32clipboard.OpenClipboard()
-            if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
-                old_clipboard = win32clipboard.GetClipboardData(win32clipboard.CF_UNICODETEXT)
-                has_old = True
-            win32clipboard.CloseClipboard()
+            for _ in range(3):
+                try:
+                    win32clipboard.OpenClipboard()
+                    try:
+                        if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
+                            old_clipboard = win32clipboard.GetClipboardData(win32clipboard.CF_UNICODETEXT)
+                            has_old = True
+                    finally:
+                        win32clipboard.CloseClipboard()
+                    break
+                except Exception:
+                    time.sleep(0.02)
         except Exception:
             pass
 
         # 2. Put transcribed text into clipboard and simulate Ctrl+V
+        pasted_ok = False
         try:
-            win32clipboard.OpenClipboard()
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardData(win32clipboard.CF_UNICODETEXT, text + " ")
-            win32clipboard.CloseClipboard()
+            for _ in range(3):
+                try:
+                    win32clipboard.OpenClipboard()
+                    try:
+                        win32clipboard.EmptyClipboard()
+                        win32clipboard.SetClipboardData(win32clipboard.CF_UNICODETEXT, text + " ")
+                    finally:
+                        win32clipboard.CloseClipboard()
+                    pasted_ok = True
+                    break
+                except Exception:
+                    time.sleep(0.02)
 
-            time.sleep(0.04)
-            # Execute paste via pyautogui or keybd_event
-            pyautogui.hotkey("ctrl", "v")
-            time.sleep(0.08)
+            if pasted_ok:
+                time.sleep(0.04)
+                pyautogui.hotkey("ctrl", "v")
+                time.sleep(0.08)
+            else:
+                pyautogui.typewrite(text + " ", interval=0.01)
 
         except Exception as paste_err:
             logger.warning("[Stapler] Clipboard paste failed (%s), using direct typewrite", paste_err)
@@ -202,17 +220,21 @@ class StaplerDictationEngine:
         if has_old:
             def _restore():
                 time.sleep(0.5)
-                try:
-                    win32clipboard.OpenClipboard()
-                    win32clipboard.EmptyClipboard()
-                    win32clipboard.SetClipboardData(win32clipboard.CF_UNICODETEXT, old_clipboard)
-                    win32clipboard.CloseClipboard()
-                except Exception:
-                    pass
+                for _ in range(3):
+                    try:
+                        win32clipboard.OpenClipboard()
+                        try:
+                            win32clipboard.EmptyClipboard()
+                            win32clipboard.SetClipboardData(win32clipboard.CF_UNICODETEXT, old_clipboard)
+                        finally:
+                            win32clipboard.CloseClipboard()
+                        break
+                    except Exception:
+                        time.sleep(0.03)
             threading.Thread(target=_restore, daemon=True).start()
 
     def _hotkey_loop(self):
-        """Native Windows message pump listening for Ctrl+Alt+Space."""
+        """Native Windows message pump listening for Ctrl+Alt+Space with PeekMessageW."""
         thread_id = kernel32.GetCurrentThreadId()
         registered = user32.RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL | MOD_ALT, VK_SPACE)
         if not registered:
@@ -221,19 +243,21 @@ class StaplerDictationEngine:
 
         logger.info("Stapler HotKey message pump started on thread %d", thread_id)
         msg = ctypes.wintypes.MSG()
+        PM_REMOVE = 0x0001
 
         try:
             while not self._stop_event.is_set():
-                res = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
-                if res <= 0:
-                    break
+                if user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE):
+                    if msg.message == win32con.WM_QUIT:
+                        break
+                    if msg.message == WM_HOTKEY and msg.wParam == HOTKEY_ID:
+                        # Spawn record and inject in a separate thread so message pump is never blocked
+                        threading.Thread(target=self.record_and_inject, daemon=True, name="StaplerWorker").start()
 
-                if msg.message == WM_HOTKEY and msg.wParam == HOTKEY_ID:
-                    # Spawn record and inject in a separate thread so message pump is never blocked
-                    threading.Thread(target=self.record_and_inject, daemon=True, name="StaplerWorker").start()
-
-                user32.TranslateMessage(ctypes.byref(msg))
-                user32.DispatchMessageW(ctypes.byref(msg))
+                    user32.TranslateMessage(ctypes.byref(msg))
+                    user32.DispatchMessageW(ctypes.byref(msg))
+                else:
+                    time.sleep(0.02)
         finally:
             user32.UnregisterHotKey(None, HOTKEY_ID)
             logger.info("Stapler HotKey message pump exited and unregistered.")

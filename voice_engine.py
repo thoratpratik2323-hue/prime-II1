@@ -486,11 +486,14 @@ class VoiceEngine:
 
                     snd_filtered = pygame.sndarray.make_sound(filtered_arr)
                     channel = snd_filtered.play()
-                    while channel.get_busy() and not self._abort_utterance.is_set():
-                        clock.tick(15)
-                    if self._abort_utterance.is_set():
-                        channel.stop()
-                    played_filtered = True
+                    if channel is not None:
+                        while channel.get_busy() and not self._abort_utterance.is_set():
+                            clock.tick(15)
+                        if self._abort_utterance.is_set():
+                            channel.stop()
+                        played_filtered = True
+                    else:
+                        played_filtered = False
                 except Exception as filter_err:
                     log.debug("Stark filter render failed (%s), using standard playback", filter_err)
 

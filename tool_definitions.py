@@ -3144,7 +3144,11 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 break
 
     if builtin_handler:
-        return builtin_handler(args)
+        try:
+            return builtin_handler(args)
+        except Exception as e:
+            log.exception("Builtin tool execution error in %s", name)
+            return {"ok": False, "error": f"Tool execution failed: {e}"}
 
     # 2. Check Desktop Agent tools ($O(1)$)
     target_tool_fn = None

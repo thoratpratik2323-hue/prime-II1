@@ -437,9 +437,14 @@ class AIAgent:
                     else:
                         res_payload = {"result": exec_res.get("result", exec_res)}
 
+                    try:
+                        clean_payload = json.loads(json.dumps(res_payload, default=str))
+                    except Exception:
+                        clean_payload = {"result": str(res_payload)}
+
                     tool_results.append(types.Part.from_function_response(
                         name=fn_name,
-                        response=res_payload,
+                        response=clean_payload,
                     ))
 
                 # Send tool responses turn
@@ -568,11 +573,16 @@ class AIAgent:
                     else:
                         res_content = exec_res
 
+                    try:
+                        content_str = json.dumps(res_content, default=str)
+                    except Exception:
+                        content_str = json.dumps({"result": str(res_content)})
+
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
                         "name": fn_name,
-                        "content": json.dumps(res_content),
+                        "content": content_str,
                     })
 
             final_text = "Action completed."

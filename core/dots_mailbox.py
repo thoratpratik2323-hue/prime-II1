@@ -132,6 +132,7 @@ class DotsMailboxRouter:
         self._thread: Optional[threading.Thread] = None
         self._flight_events: List[Dict[str, Any]] = []  # In-flight envelope events for 2D UI
         self._flight_lock = threading.Lock()
+        self._dispatch_lock = threading.RLock()
         self.start()
 
     def start(self):
@@ -152,63 +153,67 @@ class DotsMailboxRouter:
 
     def dispatch_pending(self) -> int:
         """Single-pass delivery of all pending messages across all Dot outboxes."""
-        delivered_count = 0
-        if not DOTS_BASE_DIR.exists():
-            return 0
+        with self._dispatch_lock:
+            delivered_count = 0
+            if not DOTS_BASE_DIR.exists():
+                return 0
 
-        for dot_dir in DOTS_BASE_DIR.iterdir():
-            if not dot_dir.is_dir():
-                continue
-            outbox = dot_dir / "mailbox" / "outbox"
-            if not outbox.exists():
-                continue
+            for dot_dir in DOTS_BASE_DIR.iterdir():
+                if not dot_dir.is_dir():
+                    continue
+                outbox = dot_dir / "mailbox" / "outbox"
+                if not outbox.exists():
+                    continue
 
-            for msg_file in sorted(outbox.glob("*.json")):
-                try:
-                    with open(msg_file, "r", encoding="utf-8") as f:
-                        msg = json.load(f)
-
-                    recipient_id = msg.get("recipient")
-                    sender_id = msg.get("sender")
-                    if not recipient_id:
+                for msg_file in sorted(outbox.glob("*.json")):
+                    if not msg_file.exists():
                         continue
+                    try:
+                        with open(msg_file, "r", encoding="utf-8") as f:
+                            msg = json.load(f)
 
-                    # Deliver to recipient inbox
-                    recipient_inbox = DOTS_BASE_DIR / recipient_id / "mailbox" / "inbox"
-                    recipient_inbox.mkdir(parents=True, exist_ok=True)
+                        recipient_id = msg.get("recipient")
+                        sender_id = msg.get("sender")
+                        if not recipient_id:
+                            continue
 
-                    target_name = msg_file.name
-                    target_file = recipient_inbox / target_name
+                        # Deliver to recipient inbox
+                        recipient_inbox = DOTS_BASE_DIR / recipient_id / "mailbox" / "inbox"
+                        recipient_inbox.mkdir(parents=True, exist_ok=True)
 
-                    # Copy to recipient inbox
-                    shutil.copy2(str(msg_file), str(target_file))
+                        target_name = msg_file.name
+                        target_file = recipient_inbox / target_name
 
-                    # Move from outbox to sent
-                    sent_dir = outbox / ".sent"
-                    sent_dir.mkdir(parents=True, exist_ok=True)
-                    shutil.move(str(msg_file), str(sent_dir / target_name))
+                        # Copy to recipient inbox
+                        shutil.copy2(str(msg_file), str(target_file))
 
-                    delivered_count += 1
-                    logger.info("[Router] Delivered %s from %s -> %s", msg.get("id"), sender_id, recipient_id)
+                        # Move from outbox to sent
+                        sent_dir = outbox / ".sent"
+                        sent_dir.mkdir(parents=True, exist_ok=True)
+                        if msg_file.exists():
+                            shutil.move(str(msg_file), str(sent_dir / target_name))
 
-                    # Register visual envelope flight event for 2D Office Floor
-                    with self._flight_lock:
-                        self._flight_events.append({
-                            "id": msg.get("id"),
-                            "sender": sender_id,
-                            "recipient": recipient_id,
-                            "subject": msg.get("subject", "Task Update"),
-                            "action": msg.get("action", "data_share"),
-                            "timestamp": time.time(),
-                        })
-                        # Keep last 50 events
-                        if len(self._flight_events) > 50:
-                            self._flight_events = self._flight_events[-50:]
+                        delivered_count += 1
+                        logger.info("[Router] Delivered %s from %s -> %s", msg.get("id"), sender_id, recipient_id)
 
-                except Exception as e:
-                    logger.error("[Router] Error routing %s: %s", msg_file.name, e)
+                        # Register visual envelope flight event for 2D Office Floor
+                        with self._flight_lock:
+                            self._flight_events.append({
+                                "id": msg.get("id"),
+                                "sender": sender_id,
+                                "recipient": recipient_id,
+                                "subject": msg.get("subject", "Task Update"),
+                                "action": msg.get("action", "data_share"),
+                                "timestamp": time.time(),
+                            })
+                            # Keep last 50 events
+                            if len(self._flight_events) > 50:
+                                self._flight_events = self._flight_events[-50:]
 
-        return delivered_count
+                    except Exception as e:
+                        logger.error("[Router] Error routing %s: %s", msg_file.name, e)
+
+            return delivered_count
 
     def get_recent_flights(self, seconds_window: float = 30.0) -> List[Dict[str, Any]]:
         """Get visual envelope flights that occurred within the time window."""
