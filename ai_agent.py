@@ -38,9 +38,11 @@ Capabilities:
 
 Guidelines:
 1. Universal Action First: When the operator asks you to do ANY action on their PC (e.g. click something, type a message, run a script, open a project, install a tool, change settings, inspect screen, kill a process), choose the right tool immediately without hesitation.
-2. Operator Preference: Whenever the operator asks to open any app, platform, or service (e.g. YouTube, WhatsApp, Spotify, Discord, Telegram, ChatGPT, Netflix, Twitter, Instagram, GitHub, etc.), ALWAYS open it in the web browser using the openWebsite tool.
-3. Speak concisely, clearly, and naturally like an elite AI assistant. Avoid unnecessary disclaimers.
-4. If an action succeeds, briefly confirm what was done. If a tool fails, explain what happened and suggest an immediate fix.
+2. Operator Preference for Web & Apps: Whenever the operator asks to open any website, app, platform, or service (e.g. YouTube, WhatsApp, Spotify, Discord, Telegram, ChatGPT, Netflix, Twitter, Instagram, GitHub, etc.), ALWAYS open it in Google Chrome using the openWebsite tool.
+3. Closing Applications & Windows: If the operator says "close app", "band karo", "ye app close karo", "close this", or "close window" without naming an app, IMMEDIATELY call closeWindow or closeApplication with {"name": "active"} to close the active foreground window! If an app name is specified (e.g. "close chrome", "chrome band karo"), call closeApplication with {"name": "<app_name>"}. NEVER ask the operator which app to close when they say "app close karo" or "close this" — close the active window immediately.
+4. Speak concisely, clearly, and naturally like an elite AI assistant. Avoid unnecessary disclaimers.
+5. If an action succeeds, briefly confirm what was done. If a tool fails, explain what happened and suggest an immediate fix.
+
 
 Karpathy Engineering & Coding Principles (Strict Discipline):
 1. Think Before Coding: Never make assumptions or pick interpretations silently. State assumptions explicitly. If uncertain or ambiguous, stop and ask. Surface trade-offs. Push back if a simpler design exists.
@@ -300,7 +302,15 @@ class AIAgent:
             trace_logger.end_trace(active_trace, response=msg)
             return msg
 
+        # 0. Fast-Path Direct System Command Execution (Zero latency for hardware/app actions)
+        fast_res = self._process_fast_command(user_input, on_tool_call, logged_tool_result)
+        if fast_res is not None:
+            trace_logger.end_trace(active_trace, response=fast_res)
+            self._record_memory_turn(user_input, fast_res)
+            return fast_res
+
         provider = config.get_active_provider()
+
 
         # 1. If provider is Gemini
         now = time.time()
@@ -552,7 +562,133 @@ class AIAgent:
                 return local_res
             return "Network connection unreachable, Sir. Local offline command engine ready."
 
+    def _process_fast_command(
+        self,
+        user_input: str,
+        on_tool_call: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        on_tool_result: Optional[Callable[[str, Any], None]] = None,
+    ) -> Optional[str]:
+        """
+        Sub-millisecond fast-path execution for direct hardware, window, and app operations.
+        Returns a response string if handled directly, or None if the request requires LLM reasoning.
+        """
+        lower = user_input.lower().strip()
+
+        def _extract_res_str(r_obj: Any, default: str = "") -> str:
+            if isinstance(r_obj, dict):
+                r = r_obj.get("result", default)
+                if isinstance(r, dict):
+                    return str(r.get("result", r))
+                return str(r)
+            return str(r_obj) if r_obj else default
+
+        # 1. Close Active Window / App (Generic English & Hinglish)
+        if (
+            re.search(r"^(?:close|exit|quit|band\s*karo|band\s*kar\s*do|hatao)\s*(?:the\s+)?(?:app|application|window|this|current|ye\s*app|is\s*app)?\s*(?:please)?$", lower)
+            or re.search(r"^(?:ye\s*app|is\s*app|window|app|application)\s*(?:ko\s*)?(?:close\s*karo|close\s*kar\s*do|band\s*karo|band\s*kar\s*do|hatao)$", lower)
+            or lower in ("close", "band karo", "band kar do", "close app", "app close karo", "close this", "close window", "window band karo", "ye close karo", "is app ko close karo", "isko close karo", "ye band karo")
+        ):
+            from desktop_agent.tools_windows import close_window
+            if on_tool_call:
+                on_tool_call("closeWindow", {})
+            res = close_window({})
+            if on_tool_result:
+                on_tool_result("closeWindow", res)
+            msg = res.get("result", "Closed active window.")
+            if voice.tts_enabled:
+                voice.speak(msg)
+            return msg
+
+        # 2. Close Named Application (English & Hinglish)
+        m_close = (
+            re.search(r"^(?:close|exit|quit|kill|terminate|shut\s*down)\s+(?:the\s+)?([a-zA-Z0-9_\-\.\s]+?)(?:\s+(?:app|application|window|please))?$", lower)
+            or re.search(r"^(?:band\s+karo|band\s+kar\s+do|hatao|khatam\s+karo)\s+(?:the\s+)?([a-zA-Z0-9_\-\.\s]+?)(?:\s+(?:app|application|window))?$", lower)
+            or re.search(r"^([a-zA-Z0-9_\-\.\s]+?)\s+(?:close\s+karo|close\s+kar\s+do|band\s+karo|band\s+kar\s+do|hatao|kill\s+karo)$", lower)
+        )
+        if m_close:
+            target = m_close.group(1).strip()
+            target = re.sub(r"\b(app|application|the|please|window)\b", "", target, flags=re.IGNORECASE).strip()
+            if target and target not in ("this", "active", "current", "ye", "is"):
+                if on_tool_call:
+                    on_tool_call("closeApplication", {"name": target})
+                res = execute_tool("closeApplication", {"name": target})
+                if on_tool_result:
+                    on_tool_result("closeApplication", res)
+                msg = _extract_res_str(res, f"Closed {target}.")
+                if voice.tts_enabled:
+                    voice.speak(msg)
+                return msg
+            else:
+                from desktop_agent.tools_windows import close_window
+                if on_tool_call:
+                    on_tool_call("closeWindow", {})
+                res = close_window({})
+                if on_tool_result:
+                    on_tool_result("closeWindow", res)
+                msg = res.get("result", "Closed active window.")
+                if voice.tts_enabled:
+                    voice.speak(msg)
+                return msg
+
+        # 3. Open website in Google Chrome or Open Application
+        m_app = (
+            re.match(r"^(?:open|launch|start|kholo|chalao)\s+(?:the\s+)?(?:app\s+)?([a-zA-Z0-9\s\.\-_]+)$", lower)
+            or re.match(r"^(?:app\s+open\s+(?:karo\s+)?)([a-zA-Z0-9\s\.\-_]+)$", lower)
+            or re.match(r"^([a-zA-Z0-9\s\.\-_]+)\s+(?:open|launch|start|kholo|chalao)(?:\s+karo)?$", lower)
+        )
+        if m_app:
+            raw_target = m_app.group(1).strip()
+            target = re.sub(r'\b(app|application|karo|please|the)\b', '', raw_target, flags=re.IGNORECASE).strip() or raw_target
+            from desktop_agent.tools_websites import SITE_URLS
+            web_keywords = ("youtube", "google", "github", "reddit", "twitter", "instagram", "facebook", "linkedin", "chatgpt", "netflix", "gmail", "spotify", "hotstar", "amazon", "flipkart")
+            if target.lower() in SITE_URLS or any(k in target.lower() for k in web_keywords) or any(target.lower().endswith(ext) for ext in (".com", ".org", ".net", ".io", ".ai", ".in", ".co", ".app")):
+                if on_tool_call:
+                    on_tool_call("openWebsite", {"url": target, "name": target})
+                res = execute_tool("openWebsite", {"url": target, "name": target})
+                if on_tool_result:
+                    on_tool_result("openWebsite", res)
+                msg = f"Opening {target.title()} in Google Chrome."
+                if voice.tts_enabled:
+                    voice.speak(msg)
+                return msg
+            else:
+                if on_tool_call:
+                    on_tool_call("openApplication", {"name": target})
+                res = execute_tool("openApplication", {"name": target})
+                if on_tool_result:
+                    on_tool_result("openApplication", res)
+                if res.get("ok") is False:
+                    msg = res.get("error", f"Failed to open {target}.")
+                else:
+                    msg = _extract_res_str(res, f"Opened {target.title()}.")
+                if voice.tts_enabled:
+                    voice.speak(msg)
+                return msg
+
+        # 4. Volume / Mute
+        if lower in ("volume up", "increase volume", "awaz badao", "sound badhao"):
+            execute_tool("volumeUp", {"amount": 10})
+            msg = "Volume increased."
+            if voice.tts_enabled:
+                voice.speak(msg)
+            return msg
+        if lower in ("volume down", "decrease volume", "awaz kam karo", "sound kam karo"):
+            execute_tool("volumeDown", {"amount": 10})
+            msg = "Volume decreased."
+            if voice.tts_enabled:
+                voice.speak(msg)
+            return msg
+        if lower in ("mute", "unmute", "mute toggle", "awaz band karo"):
+            execute_tool("muteToggle", {})
+            msg = "Mute toggled."
+            if voice.tts_enabled:
+                voice.speak(msg)
+            return msg
+
+        return None
+
     def _process_local_fallback(
+
         self,
         user_input: str,
         on_tool_call: Optional[Callable[[str, Dict[str, Any]], None]],
@@ -837,10 +973,11 @@ class AIAgent:
                 target = raw_target
 
             # Check if it's a website or app
-            web_keywords = ("youtube", "google", "github", "reddit", "twitter", "instagram", "facebook", "linkedin", "chatgpt", "netflix", "gmail")
-            if any(k in target.lower() for k in web_keywords) or any(target.lower().endswith(ext) for ext in (".com", ".org", ".net", ".io", ".ai", ".in")):
+            from desktop_agent.tools_websites import SITE_URLS
+            web_keywords = ("youtube", "google", "github", "reddit", "twitter", "instagram", "facebook", "linkedin", "chatgpt", "netflix", "gmail", "spotify", "hotstar", "amazon", "flipkart")
+            if target.lower() in SITE_URLS or any(k in target.lower() for k in web_keywords) or any(target.lower().endswith(ext) for ext in (".com", ".org", ".net", ".io", ".ai", ".in", ".co", ".app")):
                 execute_tool("openWebsite", {"url": target, "name": target})
-                msg = f"Opening {target} in browser."
+                msg = f"Opening {target} in Google Chrome."
                 if voice.tts_enabled:
                     voice.speak(msg)
                 return msg
@@ -854,7 +991,24 @@ class AIAgent:
                     voice.speak(msg)
                 return msg
 
-        # 4. Close application (supports prefix & suffix phrasing in English & Hinglish)
+        # 4a. Close active window / generic app close intent (English & Hinglish)
+        if (
+            re.search(r"^(?:close|exit|quit|band\s*karo|band\s*kar\s*do|hatao)\s*(?:the\s+)?(?:app|application|window|this|current|ye\s*app|is\s*app)?\s*(?:please)?$", lower)
+            or re.search(r"^(?:ye\s*app|is\s*app|window|app|application)\s*(?:ko\s*)?(?:close\s*karo|close\s*kar\s*do|band\s*karo|band\s*kar\s*do|hatao)$", lower)
+            or lower in ("close", "band karo", "band kar do", "close app", "app close karo", "close this", "close window", "window band karo", "ye close karo", "is app ko close karo")
+        ):
+            from desktop_agent.tools_windows import close_window
+            try:
+                res = close_window({})
+                msg = res.get("result", "Closed active window.")
+            except Exception:
+                res = execute_tool("closeApplication", {"name": "active"})
+                msg = _extract_res_str(res, "Closed active application.")
+            if voice.tts_enabled:
+                voice.speak(msg)
+            return msg
+
+        # 4b. Close named application (supports prefix & suffix phrasing in English & Hinglish)
         m_close = (
             re.search(r"^(?:close|exit|quit|kill|terminate|shut\s*down)\s+(?:the\s+)?([a-zA-Z0-9_\-\.\s]+?)(?:\s+(?:app|application|window|please))?$", lower)
             or re.search(r"^(?:band\s+karo|band\s+kar\s+do|hatao|khatam\s+karo)\s+(?:the\s+)?([a-zA-Z0-9_\-\.\s]+?)(?:\s+(?:app|application|window))?$", lower)
@@ -874,6 +1028,14 @@ class AIAgent:
                 if voice.tts_enabled:
                     voice.speak(msg)
                 return msg
+            else:
+                from desktop_agent.tools_windows import close_window
+                res = close_window({})
+                msg = res.get("result", "Closed active window.")
+                if voice.tts_enabled:
+                    voice.speak(msg)
+                return msg
+
 
         # 5. YouTube Search (only on explicit search intent)
         if "search youtube for" in lower or "youtube search" in lower or lower.startswith("search youtube"):

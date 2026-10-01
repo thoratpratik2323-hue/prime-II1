@@ -200,5 +200,22 @@
       "error": null
     },
     "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_0c9a8a9c84",
+    "timestamp": "2026-10-01T18:42:20.242273",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
   }
 ]

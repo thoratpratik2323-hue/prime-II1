@@ -156,7 +156,8 @@ def close_application(args: Dict[str, Any]) -> Dict[str, Any]:
     name = args.get("name") or args.get("application") or args.get("app") or args.get("target")
     force = bool(args.get("force", True))  # Default True on Windows so browsers/Electron apps close reliably
     if not name:
-        raise ToolError("Parameter 'name' (application name) is required.")
+        from .tools_windows import close_window
+        return close_window({})
 
     # 1. Clean out English/Hinglish action keywords and filler
     raw = str(name).strip()
@@ -168,6 +169,11 @@ def close_application(args: Dict[str, Any]) -> Dict[str, Any]:
     ).strip()
     target = cleaned if cleaned else raw
     key = target.lower()
+
+    if not key or key in ("app", "application", "window", "this", "current", "active", "ye", "yeh", "is", "isko"):
+        from .tools_windows import close_window
+        return close_window({})
+
 
     # 2. Check canonical aliases
     aliases = {

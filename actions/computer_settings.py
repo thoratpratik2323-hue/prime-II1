@@ -468,12 +468,21 @@ def brightness_set(value: int):
             print(f"[Settings] brightness_set({value}): all methods failed. Consider: pip install screen-brightness-control")
 
 def close_app():
-    if _OS == "Darwin": pyautogui.hotkey("command", "q")
-    else:               pyautogui.hotkey("alt", "f4")
+    try:
+        from desktop_agent.tools_windows import close_window as _win_close
+        _win_close({})
+    except Exception:
+        if _OS == "Darwin": pyautogui.hotkey("command", "q")
+        else:               pyautogui.hotkey("alt", "f4")
 
 def close_window():
-    if _OS == "Darwin": pyautogui.hotkey("command", "w")
-    else:               pyautogui.hotkey("ctrl", "w")
+    try:
+        from desktop_agent.tools_windows import close_window as _win_close
+        _win_close({})
+    except Exception:
+        if _OS == "Darwin": pyautogui.hotkey("command", "w")
+        else:               pyautogui.hotkey("ctrl", "w")
+
 
 def full_screen():
     if _OS == "Darwin": pyautogui.hotkey("ctrl", "command", "f")

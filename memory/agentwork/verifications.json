@@ -142,5 +142,21 @@
     ],
     "verified_at": 1790859393.9659917,
     "status": "PASSED"
+  },
+  "ver_d1b796c2a5ab": {
+    "job_id": "ver_d1b796c2a5ab",
+    "task_id": "test_task_tool",
+    "delivery_id": "del_tool_1",
+    "commit_sha": "HEAD",
+    "all_passed": true,
+    "results": [
+      {
+        "command": "mock:pass",
+        "passed": true,
+        "output": "Tests passed: 100% assertions satisfied"
+      }
+    ],
+    "verified_at": 1790860340.404886,
+    "status": "PASSED"
   }
 }

@@ -188,5 +188,12 @@
     "topic": "Tool Failure: minimizeWindow",
     "insight": "Command 'reduce yourself' failed with args {}. Ensure parameters and fallback routing are validated.",
     "source": "trace_reflection_loop"
+  },
+  {
+    "id": 28,
+    "timestamp": "2026-10-01T18:36:58.368107",
+    "topic": "Tool Failure: closeWindow",
+    "insight": "Command 'ye app close kar do' failed with args {}. Ensure parameters and fallback routing are validated.",
+    "source": "trace_reflection_loop"
   }
 ]

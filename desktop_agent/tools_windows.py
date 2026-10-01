@@ -129,11 +129,45 @@ def maximize_window(args: Dict[str, Any]) -> Dict[str, Any]:
     return {"result": f"Maximized window: {title or 'active window'}."}
 
 
+def _send_alt_f4() -> bool:
+    """Send Alt+F4 natively using Win32 API without PyAutoGUI fail-safe crash."""
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            # VK_MENU (Alt) = 0x12, VK_F4 = 0x73, KEYEVENTF_KEYUP = 0x0002
+            ctypes.windll.user32.keybd_event(0x12, 0, 0, 0)
+            ctypes.windll.user32.keybd_event(0x73, 0, 0, 0)
+            time.sleep(0.05)
+            ctypes.windll.user32.keybd_event(0x73, 0, 0x0002, 0)
+            ctypes.windll.user32.keybd_event(0x12, 0, 0x0002, 0)
+            return True
+        except Exception:
+            pass
+    try:
+        import pyautogui
+        old_failsafe = getattr(pyautogui, "FAILSAFE", True)
+        pyautogui.FAILSAFE = False
+        try:
+            pyautogui.hotkey("alt", "f4")
+        finally:
+            pyautogui.FAILSAFE = old_failsafe
+        return True
+    except Exception:
+        return False
+
+
 @register("closeWindow")
 def close_window(args: Dict[str, Any]) -> Dict[str, Any]:
-    hwnd, title = _resolve_target(args)
-    _close_window_hwnd(hwnd)
-    return {"result": f"Closed window: {title or 'active window'}."}
+    try:
+        hwnd, title = _resolve_target(args)
+        _close_window_hwnd(hwnd)
+        return {"result": f"Closed window: {title or 'active window'}."}
+    except Exception:
+        if _send_alt_f4():
+            return {"result": "Closed active window."}
+        raise ToolError("Could not close window.")
+
+
 
 
 @register("switchApplication")

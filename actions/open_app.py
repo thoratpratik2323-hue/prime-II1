@@ -30,7 +30,7 @@ _APP_ALIASES: dict[str, dict[str, str]] = {
     "signal":             {"Windows": "signal",                  "Darwin": "Signal",               "Linux": "signal"},
     "spotify":            {"Windows": "Spotify",                 "Darwin": "Spotify",              "Linux": "spotify"},
     "vlc":                {"Windows": "vlc",                     "Darwin": "VLC",                  "Linux": "vlc"},
-    "netflix":            {"Windows": "firefox",                 "Darwin": "Netflix",              "Linux": "firefox"},
+    "netflix":            {"Windows": "chrome",                  "Darwin": "Google Chrome",        "Linux": "google-chrome"},
     "vscode":             {"Windows": "code",                    "Darwin": "Visual Studio Code",   "Linux": "code"},
     "visual studio code": {"Windows": "code",                    "Darwin": "Visual Studio Code",   "Linux": "code"},
     "code":               {"Windows": "code",                    "Darwin": "Visual Studio Code",   "Linux": "code"},
@@ -54,8 +54,9 @@ _APP_ALIASES: dict[str, dict[str, str]] = {
     "settings":           {"Windows": "ms-settings:",            "Darwin": "System Preferences",   "Linux": "gnome-control-center"},
     "calculator":         {"Windows": "calc.exe",                "Darwin": "Calculator",           "Linux": "gnome-calculator"},
     "paint":              {"Windows": "mspaint.exe",             "Darwin": "Preview",              "Linux": "gimp"},
-    "instagram":          {"Windows": "firefox",                 "Darwin": "Instagram",            "Linux": "firefox"},
-    "tiktok":             {"Windows": "firefox",                 "Darwin": "TikTok",               "Linux": "firefox"},
+    "instagram":          {"Windows": "chrome",                  "Darwin": "Google Chrome",        "Linux": "google-chrome"},
+    "tiktok":             {"Windows": "chrome",                  "Darwin": "Google Chrome",        "Linux": "google-chrome"},
+
     "notion":             {"Windows": "Notion",                  "Darwin": "Notion",               "Linux": "notion"},
     "obsidian":           {"Windows": "Obsidian",                "Darwin": "Obsidian",             "Linux": "obsidian"},
     "capcut":             {"Windows": "CapCut",                  "Darwin": "CapCut",               "Linux": "capcut"},
@@ -110,8 +111,21 @@ _COMMON_WEBSITES = {
     "chatgpt": "https://chatgpt.com",
     "stackoverflow": "https://stackoverflow.com",
     "reddit": "https://www.reddit.com",
-    "linkedin": "https://www.linkedin.com"
+    "linkedin": "https://www.linkedin.com",
+    "netflix": "https://www.netflix.com",
+    "instagram": "https://www.instagram.com",
+    "tiktok": "https://www.tiktok.com",
+    "twitter": "https://twitter.com",
+    "x": "https://x.com",
+    "facebook": "https://www.facebook.com",
+    "spotify": "https://open.spotify.com",
+    "whatsapp": "https://web.whatsapp.com",
+    "amazon": "https://www.amazon.in",
+    "flipkart": "https://www.flipkart.com",
+    "hotstar": "https://www.hotstar.com",
+    "jiocinema": "https://www.jiocinema.com",
 }
+
 
 def _find_windows_app_path(app_name: str) -> str | None:
     import winreg
