@@ -81,5 +81,56 @@
       "error": null
     },
     "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_7a8a63366a",
+    "timestamp": "2026-10-01T07:58:21.249916",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_219cc3fdba",
+    "timestamp": "2026-10-01T07:59:15.012971",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
+  },
+  {
+    "receipt_id": "rcpt_7675c73a28",
+    "timestamp": "2026-10-01T08:02:12.215982",
+    "action_type": "runTerminalCommand",
+    "tool_name": "runTerminalCommand",
+    "target": "echo Prime Safety Test",
+    "pre_state": {},
+    "post_state": {},
+    "metadata": {
+      "params": {
+        "command": "echo Prime Safety Test"
+      },
+      "status": "SUCCESS",
+      "error": null
+    },
+    "rolled_back": false
   }
 ]

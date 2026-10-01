@@ -2489,11 +2489,11 @@ def _handle_list_execution_receipts(args: Dict[str, Any]) -> Dict[str, Any]:
 
 def _handle_remember_user_preference(args: Dict[str, Any]) -> Dict[str, Any]:
     try:
-        from actions.friday_memory import remember_user_preference
+        from core.master_brain import prime_brain
         key = args.get("key") or args.get("name") or ""
         val = args.get("value") or args.get("pref") or ""
         cat = args.get("category") or "preferences"
-        return remember_user_preference(key, val, category=cat)
+        return prime_brain.remember(key, val, category=cat)
     except Exception as e:
         return {"ok": False, "error": f"rememberUserPreference error: {e}"}
 
@@ -2510,9 +2510,9 @@ def _handle_recall_preferences(args: Dict[str, Any]) -> Dict[str, Any]:
 
 def _handle_forget_user_preference(args: Dict[str, Any]) -> Dict[str, Any]:
     try:
-        from actions.friday_memory import forget_user_preference
+        from core.master_brain import prime_brain
         key = args.get("key") or args.get("name") or ""
-        return forget_user_preference(key)
+        return prime_brain.forget(key)
     except Exception as e:
         return {"ok": False, "error": f"forgetUserPreference error: {e}"}
 

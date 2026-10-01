@@ -92,8 +92,15 @@ class TestSystemUpgrades(unittest.TestCase):
         # 1. Store
         save_res = remember_user_preference(test_key, test_val, category="preferences")
         self.assertTrue(save_res.get("ok"))
-        self.assertTrue(save_res.get("synced_obsidian"))
-        self.assertTrue(save_res.get("synced_brain"))
+        # Master Brain returns synced_layers list; verify actual sync occurred via downstream checks
+        synced = save_res.get("synced_layers", [])
+        if synced:
+            self.assertIn("obsidian_vault", synced)
+            self.assertIn("sqlite_graph", synced)
+        else:
+            # Legacy format fallback
+            self.assertTrue(save_res.get("synced_obsidian"))
+            self.assertTrue(save_res.get("synced_brain"))
 
         # Check JSON memory ledger
         recalled = recall_user_preferences(test_key)
@@ -115,8 +122,14 @@ class TestSystemUpgrades(unittest.TestCase):
         # 2. Forget
         forget_res = forget_user_preference(test_key)
         self.assertTrue(forget_res.get("ok"))
-        self.assertTrue(forget_res.get("synced_obsidian"))
-        self.assertTrue(forget_res.get("synced_brain"))
+        # Master Brain returns deleted_from list
+        deleted = forget_res.get("deleted_from", [])
+        if deleted:
+            self.assertIn("obsidian_vault", deleted)
+            self.assertIn("sqlite_graph", deleted)
+        else:
+            self.assertTrue(forget_res.get("synced_obsidian"))
+            self.assertTrue(forget_res.get("synced_brain"))
 
         # Verify removal across all 3
         self.assertEqual(recall_user_preferences(test_key).get("count"), 0)

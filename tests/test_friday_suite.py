@@ -191,7 +191,7 @@ class TestToolDefinitionsFridayIntegration(unittest.TestCase):
         self.assertTrue(res["ok"])
         mock_undo.assert_called_once()
 
-    @patch("actions.friday_memory.remember_user_preference")
+    @patch("core.master_brain.prime_brain.remember")
     def test_execute_remember(self, mock_rem):
         mock_rem.return_value = {"ok": True, "message": "Remembered"}
         res = tool_definitions.execute_tool("rememberUserPreference", {"key": "theme", "value": "Tokyo Night"})

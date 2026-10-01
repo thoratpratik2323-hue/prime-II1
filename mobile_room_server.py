@@ -302,11 +302,11 @@ def api_hud_state():
     except Exception:
         pass
 
-    # 4. User Preferences Memory Ledger count
+    # 4. User Preferences Memory (via Master Brain)
     preferences_count = 0
     try:
-        from actions.friday_memory import memory_ledger
-        preferences_count = len(memory_ledger.memories)
+        from core.master_brain import prime_brain
+        preferences_count = len(prime_brain._ram_cache)
     except Exception:
         pass
 

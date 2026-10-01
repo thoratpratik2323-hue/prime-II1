@@ -4,6 +4,10 @@ Explicit User Preference & Memory Ledger for Prime AI (Inspired by debpalash/fri
 
 Allows users to explicitly store, recall, and delete personal preferences, working rules,
 facts, and corrections that persist across sessions and power intelligent personalization.
+
+NOTE: This module is a thin proxy that delegates to the Prime Master Brain for
+multi-layer atomic sync. The FridayMemoryLedger class remains as the durable JSON
+persistence layer used internally by Master Brain.
 """
 
 import json
@@ -17,7 +21,8 @@ MEMORY_FILE = Path(__file__).resolve().parent.parent / "data" / "friday_user_mem
 
 
 class FridayMemoryLedger:
-    """Explicit, user-controlled memory ledger."""
+    """Durable JSON persistence layer for user preferences.
+    Master Brain uses this internally for Layer 1 (JSON Ledger) storage."""
 
     VALID_CATEGORIES = {"preferences", "facts", "rules", "corrections"}
 
@@ -42,48 +47,20 @@ class FridayMemoryLedger:
         except Exception as e:
             logger.warning(f"Failed to persist user memory: {e}")
 
-    def _sync_to_brain(self, key: str, value: str = "", category: str = "", action: str = "store"):
-        """Synchronize memory fact into SQLite brain graph layer."""
-        try:
-            from memory.brain import store_fact, delete_fact
-            if action == "store":
-                store_fact(
-                    subject="User",
-                    predicate=key,
-                    obj=value,
-                    confidence=1.0,
-                    source=f"friday_memory:{category}"
-                )
-            elif action == "delete":
-                delete_fact(subject="User", predicate=key)
-        except Exception as e:
-            logger.warning(f"Failed to sync fact to brain: {e}")
-
-    def _sync_to_obsidian(self):
-        """Synchronize all memories into Obsidian Vault Profile/Preferences.md."""
-        try:
-            from obsidian_rag import write_note
-            lines = [
-                "# User Profile & Preferences (Synchronized Second Brain)",
-                "",
-                f"> Automatically synchronized with Prime Friday Memory Ledger. Total records: {len(self.memories)}.",
-                f"> Last sync: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-                "",
-                "| Preference / Rule | Value | Category | Last Updated |",
-                "|---|---|---|---|",
-            ]
-            for k, item in sorted(self.memories.items()):
-                val = str(item.get("value", "")).replace("|", "\\|")
-                cat = item.get("category", "preferences")
-                ts = item.get("updated_at", "")[:19].replace("T", " ")
-                lines.append(f"| `{k}` | {val} | `{cat}` | {ts} |")
-
-            write_note("Profile/Preferences.md", "\n".join(lines), mode="write")
-        except Exception as e:
-            logger.warning(f"Failed to sync to Obsidian Vault: {e}")
-
     def remember(self, key: str, value: str, category: str = "preferences") -> Dict[str, Any]:
-        """Store or update a user memory."""
+        """Store or update a user memory. Delegates to Master Brain for atomic multi-layer sync."""
+        # Only delegate to Master Brain if this is the global singleton instance
+        if self.storage_path == MEMORY_FILE:
+            try:
+                from core.master_brain import prime_brain
+                return prime_brain.remember(key, value, category=category)
+            except Exception:
+                pass
+        # Local-only persist (for test instances or if Master Brain unavailable)
+        return self._remember_local(key, value, category)
+
+    def _remember_local(self, key: str, value: str, category: str = "preferences") -> Dict[str, Any]:
+        """Fallback: store locally without multi-layer sync."""
         k_clean = key.strip().lower()
         cat_clean = category.strip().lower()
         if cat_clean not in self.VALID_CATEGORIES:
@@ -98,15 +75,13 @@ class FridayMemoryLedger:
 
         self.memories[k_clean] = entry
         self._save_memory()
-        self._sync_to_brain(k_clean, value.strip(), cat_clean, action="store")
-        self._sync_to_obsidian()
         logger.info(f"[Friday Memory] Saved {cat_clean} '{k_clean}': '{value}'")
         return {
             "ok": True,
-            "message": f"Remembered {cat_clean} for '{key}': {value} (synced to Second Brain & Obsidian Vault)",
+            "message": f"Remembered {cat_clean} for '{key}': {value}",
             "memory": entry,
-            "synced_obsidian": True,
-            "synced_brain": True
+            "synced_obsidian": False,
+            "synced_brain": False
         }
 
     def recall(self, query: str = "", category: str = "") -> Dict[str, Any]:
@@ -131,20 +106,30 @@ class FridayMemoryLedger:
         }
 
     def forget(self, key: str) -> Dict[str, Any]:
-        """Explicitly delete a stored memory."""
+        """Delete a stored memory. Delegates to Master Brain for atomic multi-layer erasure."""
+        # Only delegate to Master Brain if this is the global singleton instance
+        if self.storage_path == MEMORY_FILE:
+            try:
+                from core.master_brain import prime_brain
+                return prime_brain.forget(key)
+            except Exception:
+                pass
+        # Local-only delete (for test instances or if Master Brain unavailable)
+        return self._forget_local(key)
+
+    def _forget_local(self, key: str) -> Dict[str, Any]:
+        """Fallback: delete locally without multi-layer sync."""
         k_clean = key.strip().lower()
         if k_clean in self.memories:
             removed = self.memories.pop(k_clean)
             self._save_memory()
-            self._sync_to_brain(k_clean, action="delete")
-            self._sync_to_obsidian()
             logger.info(f"[Friday Memory] Forgot '{k_clean}'")
             return {
                 "ok": True,
-                "message": f"Successfully deleted memory '{key}' (synced across Second Brain & Obsidian Vault).",
+                "message": f"Successfully deleted memory '{key}'.",
                 "removed": removed,
-                "synced_obsidian": True,
-                "synced_brain": True
+                "synced_obsidian": False,
+                "synced_brain": False
             }
         return {"ok": False, "error": f"No memory found matching '{key}'."}
 

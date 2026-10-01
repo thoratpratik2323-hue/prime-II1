@@ -387,7 +387,18 @@ class PrimeMasterBrain:
                 pref_lines.append(f"- {k.title()}: {v['value']}")
             blocks.append("\n".join(pref_lines))
 
-        # 2. Active Durable Task Plan
+        # 2. User Profile Knowledge Graph (Persistent facts about the user)
+        try:
+            from memory.brain import query_facts
+            facts = query_facts(subject="pratik", limit=8)
+            if facts:
+                fact_lines = [f"- {f.get('predicate', 'fact')}: {f.get('object', '')}" for f in facts if f.get('object')]
+                if fact_lines:
+                    blocks.append("[USER PROFILE & PERSISTENT KNOWLEDGE GRAPH (PRATIK)]\n" + "\n".join(fact_lines))
+        except Exception:
+            pass
+
+        # 3. Active Durable Task Plan
         try:
             from actions.friday_tasks import get_active_task_plan
             plan_res = get_active_task_plan()
@@ -405,7 +416,7 @@ class PrimeMasterBrain:
         except Exception:
             pass
 
-        # 3. Contextual RAG Retrieval (If prompt refers to specific project/architecture)
+        # 4. Contextual RAG Retrieval (If prompt refers to specific project/architecture)
         if user_prompt and len(user_prompt) > 8:
             keywords = [w for w in re.findall(r"\b[a-zA-Z]{4,}\b", user_prompt.lower()) if w not in ("please", "should", "could", "would", "about")]
             if any(k in user_prompt.lower() for k in ("architecture", "database", "agent", "tool", "obsidian", "devlog", "decision", "project", "plan", "memory")):

@@ -96,18 +96,9 @@ class AIAgent:
         if lessons:
             prompt += f"\n{lessons}"
 
-        # Cognitive Semantic Memory (Persistent facts learned about Pratik)
-        try:
-            from memory.brain import query_facts
-            facts = query_facts(subject="pratik", limit=8)
-            if facts:
-                fact_lines = [f"- {f.get('predicate', 'fact')}: {f.get('object', '')}" for f in facts if f.get('object')]
-                if fact_lines:
-                    prompt += "\n\n[USER PROFILE & PERSISTENT KNOWLEDGE GRAPH (PRATIK)]\n" + "\n".join(fact_lines)
-        except Exception:
-            pass
-
         # Single Unified Master Brain (Prime Master Cortex) Cognitive Synthesis
+        # NOTE: Master Brain's get_cognitive_context() handles ALL memory layers including
+        # Knowledge Graph, User Preferences, Durable Plans, and contextual RAG retrieval.
         try:
             from core.master_brain import prime_brain
             brain_ctx = prime_brain.get_cognitive_context()

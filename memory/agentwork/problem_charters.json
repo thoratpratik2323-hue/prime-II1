@@ -88,5 +88,140 @@
       "research",
       "impl"
     ]
+  },
+  "prob_8d6c9488d0eb": {
+    "problem_id": "prob_8d6c9488d0eb",
+    "version": "ProblemSpec-v1",
+    "title": "Quantum Resistance Engine",
+    "charter": "Implement post-quantum cryptographic primitives",
+    "scope": "GLOBAL",
+    "risk_level": "LOW",
+    "license": "MIT",
+    "acceptance_criteria": [
+      "Kyber-512 support"
+    ],
+    "bounty_usdc": 300.0,
+    "creator_agent": "Prime-Coordinator",
+    "status": "OPEN",
+    "workstreams": {
+      "research": {
+        "key": "research",
+        "title": "Algorithm Research",
+        "dependencies": [],
+        "bounty_share_pct": 50.0,
+        "allocated_usdc": 150.0,
+        "status": "READY",
+        "assigned_worker": null,
+        "completed_at": null
+      },
+      "impl": {
+        "key": "impl",
+        "title": "Implementation",
+        "dependencies": [
+          "research"
+        ],
+        "bounty_share_pct": 50.0,
+        "allocated_usdc": 150.0,
+        "status": "PENDING",
+        "assigned_worker": null,
+        "completed_at": null
+      }
+    },
+    "created_at": 1790821653.8502686,
+    "updated_at": 1790821653.85227,
+    "execution_order": [
+      "research",
+      "impl"
+    ]
+  },
+  "prob_b70fd51c6539": {
+    "problem_id": "prob_b70fd51c6539",
+    "version": "ProblemSpec-v1",
+    "title": "Quantum Resistance Engine",
+    "charter": "Implement post-quantum cryptographic primitives",
+    "scope": "GLOBAL",
+    "risk_level": "LOW",
+    "license": "MIT",
+    "acceptance_criteria": [
+      "Kyber-512 support"
+    ],
+    "bounty_usdc": 300.0,
+    "creator_agent": "Prime-Coordinator",
+    "status": "OPEN",
+    "workstreams": {
+      "research": {
+        "key": "research",
+        "title": "Algorithm Research",
+        "dependencies": [],
+        "bounty_share_pct": 50.0,
+        "allocated_usdc": 150.0,
+        "status": "READY",
+        "assigned_worker": null,
+        "completed_at": null
+      },
+      "impl": {
+        "key": "impl",
+        "title": "Implementation",
+        "dependencies": [
+          "research"
+        ],
+        "bounty_share_pct": 50.0,
+        "allocated_usdc": 150.0,
+        "status": "PENDING",
+        "assigned_worker": null,
+        "completed_at": null
+      }
+    },
+    "created_at": 1790821755.1650712,
+    "updated_at": 1790821755.1677303,
+    "execution_order": [
+      "research",
+      "impl"
+    ]
+  },
+  "prob_c04a103b0e08": {
+    "problem_id": "prob_c04a103b0e08",
+    "version": "ProblemSpec-v1",
+    "title": "Quantum Resistance Engine",
+    "charter": "Implement post-quantum cryptographic primitives",
+    "scope": "GLOBAL",
+    "risk_level": "LOW",
+    "license": "MIT",
+    "acceptance_criteria": [
+      "Kyber-512 support"
+    ],
+    "bounty_usdc": 300.0,
+    "creator_agent": "Prime-Coordinator",
+    "status": "OPEN",
+    "workstreams": {
+      "research": {
+        "key": "research",
+        "title": "Algorithm Research",
+        "dependencies": [],
+        "bounty_share_pct": 50.0,
+        "allocated_usdc": 150.0,
+        "status": "READY",
+        "assigned_worker": null,
+        "completed_at": null
+      },
+      "impl": {
+        "key": "impl",
+        "title": "Implementation",
+        "dependencies": [
+          "research"
+        ],
+        "bounty_share_pct": 50.0,
+        "allocated_usdc": 150.0,
+        "status": "PENDING",
+        "assigned_worker": null,
+        "completed_at": null
+      }
+    },
+    "created_at": 1790821932.3141413,
+    "updated_at": 1790821932.3175142,
+    "execution_order": [
+      "research",
+      "impl"
+    ]
   }
 }

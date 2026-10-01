@@ -1,1 +1,16 @@
-{}
+{
+  "editor": {
+    "key": "editor",
+    "value": "VS Code with Vim Keybindings",
+    "category": "preferences",
+    "importance": 5,
+    "updated_at": "2026-10-01T07:59:15.044918"
+  },
+  "theme": {
+    "key": "theme",
+    "value": "Tokyo Night",
+    "category": "preferences",
+    "importance": 5,
+    "updated_at": "2026-10-01T07:59:15.097166"
+  }
+}
