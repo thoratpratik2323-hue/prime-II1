@@ -204,12 +204,18 @@ def _launch_windows(app_name: str) -> bool:
 
     if is_url and target_url:
         try:
-            import webbrowser
-            webbrowser.open(target_url)
+            from desktop_agent.tools_websites import open_url
+            open_url(target_url)
             time.sleep(1.0)
             return True
         except Exception as e:
-            print(f"[open_app] Default browser launch failed for URL {target_url}: {e}")
+            try:
+                import webbrowser
+                webbrowser.open(target_url)
+                time.sleep(1.0)
+                return True
+            except Exception as ex:
+                print(f"[open_app] Browser launch failed for URL {target_url}: {ex}")
 
     # 2. Try App Path Registry
     reg_path = _find_windows_app_path(app_name)

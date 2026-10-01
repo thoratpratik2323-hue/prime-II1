@@ -223,5 +223,95 @@
       "research",
       "impl"
     ]
+  },
+  "prob_c540a6ff0a6e": {
+    "problem_id": "prob_c540a6ff0a6e",
+    "version": "ProblemSpec-v1",
+    "title": "Quantum Resistance Engine",
+    "charter": "Implement post-quantum cryptographic primitives",
+    "scope": "GLOBAL",
+    "risk_level": "LOW",
+    "license": "MIT",
+    "acceptance_criteria": [
+      "Kyber-512 support"
+    ],
+    "bounty_usdc": 300.0,
+    "creator_agent": "Prime-Coordinator",
+    "status": "OPEN",
+    "workstreams": {
+      "research": {
+        "key": "research",
+        "title": "Algorithm Research",
+        "dependencies": [],
+        "bounty_share_pct": 50.0,
+        "allocated_usdc": 150.0,
+        "status": "READY",
+        "assigned_worker": null,
+        "completed_at": null
+      },
+      "impl": {
+        "key": "impl",
+        "title": "Implementation",
+        "dependencies": [
+          "research"
+        ],
+        "bounty_share_pct": 50.0,
+        "allocated_usdc": 150.0,
+        "status": "PENDING",
+        "assigned_worker": null,
+        "completed_at": null
+      }
+    },
+    "created_at": 1790822045.8842802,
+    "updated_at": 1790822045.8890593,
+    "execution_order": [
+      "research",
+      "impl"
+    ]
+  },
+  "prob_387ebe7cf00b": {
+    "problem_id": "prob_387ebe7cf00b",
+    "version": "ProblemSpec-v1",
+    "title": "Quantum Resistance Engine",
+    "charter": "Implement post-quantum cryptographic primitives",
+    "scope": "GLOBAL",
+    "risk_level": "LOW",
+    "license": "MIT",
+    "acceptance_criteria": [
+      "Kyber-512 support"
+    ],
+    "bounty_usdc": 300.0,
+    "creator_agent": "Prime-Coordinator",
+    "status": "OPEN",
+    "workstreams": {
+      "research": {
+        "key": "research",
+        "title": "Algorithm Research",
+        "dependencies": [],
+        "bounty_share_pct": 50.0,
+        "allocated_usdc": 150.0,
+        "status": "READY",
+        "assigned_worker": null,
+        "completed_at": null
+      },
+      "impl": {
+        "key": "impl",
+        "title": "Implementation",
+        "dependencies": [
+          "research"
+        ],
+        "bounty_share_pct": 50.0,
+        "allocated_usdc": 150.0,
+        "status": "PENDING",
+        "assigned_worker": null,
+        "completed_at": null
+      }
+    },
+    "created_at": 1790823285.6167417,
+    "updated_at": 1790823285.6198711,
+    "execution_order": [
+      "research",
+      "impl"
+    ]
   }
 }

@@ -34,19 +34,21 @@ def music_control(parameters: dict[str, Any], player=None) -> str:
             try:
                 from actions.youtube_video import _scrape_first_video_url
                 url = _scrape_first_video_url(query)
+                from desktop_agent.tools_websites import open_url
                 if url:
-                    webbrowser.open(url)
+                    open_url(url)
                     return f"Opening your requested track '{query}' on YouTube, sir!"
                 else:
                     from urllib.parse import quote_plus
                     fallback_url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
-                    webbrowser.open(fallback_url)
+                    open_url(fallback_url)
                     return f"I couldn't find a direct match, but I opened YouTube search for '{query}', sir!"
             except Exception as e:
                 from urllib.parse import quote_plus
                 fallback_url = f"https://www.youtube.com/results?search_query={quote_plus(query)}"
                 try:
-                    webbrowser.open(fallback_url)
+                    from desktop_agent.tools_websites import open_url
+                    open_url(fallback_url)
                     return f"Opened YouTube search for '{query}', sir!"
                 except Exception as ex:
                     return f"Failed to open music search: {ex}"
@@ -61,7 +63,8 @@ def music_control(parameters: dict[str, Any], player=None) -> str:
             url = urls.get(vibe, urls["synthwave"])
                 
             try:
-                webbrowser.open(url)
+                from desktop_agent.tools_websites import open_url
+                open_url(url)
                 return f"Opening your favorite {vibe} focus vibe stream, sir!"
             except Exception as e:
                 return f"Failed to open music stream: {e}"

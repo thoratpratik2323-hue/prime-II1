@@ -8,11 +8,12 @@ browser and the in-app holographic BrowserAgent).
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
 import webbrowser
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from urllib.parse import quote
 
 from .registry import ToolError, register
@@ -88,18 +89,69 @@ def _normalize_url(raw: str) -> str:
     return url
 
 
+def get_chrome_path() -> Optional[str]:
+    """Locate Google Chrome executable across standard paths and Windows registry."""
+    candidates = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe"),
+        os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
+        os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
+    ]
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe") as key:
+            val, _ = winreg.QueryValueEx(key, "")
+            if os.path.isfile(val):
+                return val
+    except Exception:
+        pass
+    import shutil
+    return shutil.which("chrome") or shutil.which("google-chrome")
+
+
 def open_url(url: str) -> str:
-    """Open a URL in the default browser; returns the resolved URL."""
+    """Open a URL in Google Chrome (preferred) or default browser."""
     url = _normalize_url(url)
-    if sys.platform == "win32":
+
+    # 1. Primary: Launch directly in Google Chrome executable
+    chrome_exe = get_chrome_path()
+    if chrome_exe:
         try:
-            subprocess.Popen(f'start "" "{url}"', shell=True)
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            subprocess.Popen([chrome_exe, url], creationflags=creationflags)
             return url
         except Exception:
             pass
+
+    # 2. Try webbrowser registered chrome
+    try:
+        if chrome_exe:
+            webbrowser.register("chrome", None, webbrowser.BackgroundBrowser(chrome_exe))
+        browser = webbrowser.get("chrome")
+        if browser.open(url, new=2):
+            return url
+    except Exception:
+        pass
+
+    # 3. Fallback: Windows cmd start chrome
+    if sys.platform == "win32":
+        try:
+            subprocess.Popen(["cmd", "/c", "start", "chrome", url], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            return url
+        except Exception:
+            try:
+                subprocess.Popen(f'start "" "{url}"', shell=True)
+                return url
+            except Exception:
+                pass
+
     ok = webbrowser.open(url, new=2)
     if not ok:
-        raise ToolError(f"Failed to open default browser for {url}.")
+        raise ToolError(f"Failed to open browser for {url}.")
     return url
 
 

@@ -53,5 +53,27 @@
     "proposal_pitch": "Prime Agent is uniquely suited for this task.",
     "status": "SUBMITTED",
     "created_at": 1790821932.3202934
+  },
+  "bid_9bb239e3367f": {
+    "bid_id": "bid_9bb239e3367f",
+    "task_id": "test_task_tool",
+    "worker_agent_id": "Prime-Labor-Node-01",
+    "bid_amount_usdc": 120.0,
+    "stake_amount_usdc": 12.0,
+    "estimated_hours": 4.0,
+    "proposal_pitch": "Prime Agent is uniquely suited for this task.",
+    "status": "SUBMITTED",
+    "created_at": 1790822045.8919146
+  },
+  "bid_e36f80512265": {
+    "bid_id": "bid_e36f80512265",
+    "task_id": "test_task_tool",
+    "worker_agent_id": "Prime-Labor-Node-01",
+    "bid_amount_usdc": 120.0,
+    "stake_amount_usdc": 12.0,
+    "estimated_hours": 4.0,
+    "proposal_pitch": "Prime Agent is uniquely suited for this task.",
+    "status": "SUBMITTED",
+    "created_at": 1790823285.6236143
   }
 }

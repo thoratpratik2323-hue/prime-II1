@@ -12,5 +12,12 @@
     "category": "preferences",
     "importance": 5,
     "updated_at": "2026-10-01T07:59:15.097166"
+  },
+  "preferred_browser": {
+    "key": "preferred_browser",
+    "value": "Google Chrome (All websites, search results, and external links must strictly open in Google Chrome)",
+    "category": "rules",
+    "importance": 5,
+    "updated_at": "2026-10-01T08:24:33.282507"
   }
 }
