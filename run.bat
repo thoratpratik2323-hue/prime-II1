@@ -11,7 +11,7 @@ echo ==========================================================
 echo.
 echo Initializing 24/7 Ambient Neural Voice Cockpit...
 echo.
-"C:\Users\thora\AppData\Local\Programs\Python\Python312\python.exe" voice_assistant.py
+"C:\Users\thora\AppData\Local\Programs\Python\Python312\python.exe" voice_assistant.py %*
 if errorlevel 1 (
     echo.
     echo An error occurred while running Prime AI.

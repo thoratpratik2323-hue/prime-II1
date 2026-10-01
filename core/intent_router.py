@@ -31,8 +31,35 @@ INTENT_BROWSER = "BROWSER_ACTION"
 INTENT_MEDIA = "MEDIA_CONTROL"
 INTENT_OBSIDIAN = "OBSIDIAN_KNOWLEDGE"
 INTENT_CONVERSATION = "GENERAL_CONVERSATION"
+INTENT_FRIDAY = "FRIDAY_ASSISTANT"
+INTENT_AGENTWORK = "AGENTWORK_LABOR"
+INTENT_OPAL = "OPAL_STREAMING"
+INTENT_OS1 = "OS1_WORKSPACE"
 
 # Fast-path keywords for instant classification (<1ms)
+FRIDAY_KEYWORDS = (
+    "undo", "undo last", "revert last", "rollback", "execution receipt", "receipts",
+    "remember that", "remember preference", "remember rule", "forget preference",
+    "recall preference", "recall my", "what are my preferences", "durable plan",
+    "task plan", "check policy", "safety policy"
+)
+
+AGENTWORK_KEYWORDS = (
+    "agentwork", "collagent", "bounty", "open bounty", "labor market", "bid on task",
+    "place bid", "problem charter", "problemspec", "workstream dag", "workstream",
+    "register artifact", "verifier quorum", "escrow settlement", "settle escrow"
+)
+
+OPAL_KEYWORDS = (
+    "iptv", "web radio", "live tv", "stream url", "media stream", "ambient stream",
+    "lofi stream", "synthwave stream", "radio stream", "media copilot", "playback history"
+)
+
+OS1_KEYWORDS = (
+    "fragment", "ui fragment", "system fragment", "disk fragment", "her companion",
+    "visualizer state", "privacy guard", "sanitize prompt", "morning briefing", "daily briefing"
+)
+
 CODING_KEYWORDS = (
     "write a function", "write code", "code this", "debug", "python", "javascript",
     "typescript", "react", "html", "css", "c++", "c#", "java", "sql query",
@@ -78,6 +105,26 @@ GENERAL_KEYWORDS = (
 )
 
 ACCURACY_DIRECTIVES: Dict[str, str] = {
+    INTENT_FRIDAY: (
+        "[ACCURACY DIRECTIVE - FRIDAY SUITE]\n"
+        "- Prioritize tools: 'undoLastAction', 'listExecutionReceipts', 'rememberUserPreference', 'recallPreferences', 'forgetUserPreference', 'createDurableTaskPlan', 'checkActionPolicy'.\n"
+        "- For remembering facts/preferences, extract clear 'key' and 'value'. For undo, call 'undoLastAction'."
+    ),
+    INTENT_AGENTWORK: (
+        "[ACCURACY DIRECTIVE - AGENTWORK / COLLAGENT]\n"
+        "- Prioritize tools: 'createProblemCharter', 'decomposeProblemDAG', 'registerWorkArtifact', 'scanLaborMarketplace', 'placeLaborBid', 'verifyLaborDelivery', 'settleTaskEscrow', 'getCollagentStatus'.\n"
+        "- Match task skills feasibility and ensure USDC amounts and commit SHAs are valid."
+    ),
+    INTENT_OPAL: (
+        "[ACCURACY DIRECTIVE - OPAL STREAMING & IPTV]\n"
+        "- Prioritize tools: 'searchUniversalMedia', 'playMediaStream', 'listIPTVChannels', 'aiMediaCopilot', 'getMediaPlaybackHistory'.\n"
+        "- Match music moods (lofi, synthwave, ambient) and extract clean streaming targets."
+    ),
+    INTENT_OS1: (
+        "[ACCURACY DIRECTIVE - OS 1 CONVERSATIONAL OS]\n"
+        "- Prioritize tools: 'generateOS1Fragment', 'dismissOS1Fragment', 'listActiveFragments', 'setHERCompanionMode', 'sanitizePromptPrivacy', 'generateOS1Briefing'.\n"
+        "- Use 'generateOS1Fragment' for visual widget requests ('system_status', 'disk_usage', 'git_summary')."
+    ),
     INTENT_WHATSAPP: (
         "[ACCURACY DIRECTIVE - WHATSAPP]\n"
         "- Prioritize tools: 'sendWhatsAppMessage', 'openWhatsAppChat', 'makeWhatsAppCall', 'listWhatsAppContacts'.\n"
@@ -149,27 +196,43 @@ def classify_intent(user_message: str) -> str:
 
     msg_lower = user_message.lower().strip()
 
-    # 1. WhatsApp Action
+    # 1. Friday Assistant Actions (Undo, Memory, Policy, Durable Plans)
+    if any(k in msg_lower for k in FRIDAY_KEYWORDS) or re.search(r'\b(undo|rollback|receipts|remember that|forget preference|durable plan)\b', msg_lower):
+        return INTENT_FRIDAY
+
+    # 2. AgentWork / Collagent Labor Protocol
+    if any(k in msg_lower for k in AGENTWORK_KEYWORDS) or re.search(r'\b(agentwork|collagent|bounty|labor market|workstream dag|settle escrow)\b', msg_lower):
+        return INTENT_AGENTWORK
+
+    # 3. Opal Universal Media & IPTV Streaming
+    if any(k in msg_lower for k in OPAL_KEYWORDS) or re.search(r'\b(iptv|web radio|media stream|lofi stream|synthwave stream)\b', msg_lower):
+        return INTENT_OPAL
+
+    # 4. OS 1 Generative Ephemeral UI & Companion
+    if any(k in msg_lower for k in OS1_KEYWORDS) or re.search(r'\b(ui fragment|system fragment|disk fragment|her companion|privacy guard)\b', msg_lower):
+        return INTENT_OS1
+
+    # 5. WhatsApp Action
     if any(k in msg_lower for k in WHATSAPP_KEYWORDS) or re.search(r'\b(whatsapp|wa message|wa msg|wa call)\b', msg_lower):
         return INTENT_WHATSAPP
 
-    # 2. System Control
+    # 6. System Control
     if any(k in msg_lower for k in SYSTEM_KEYWORDS) or re.search(r'\b(volume|mute|unmute|screenshot|shutdown|restart|battery|cpu|ram)\b', msg_lower):
         return INTENT_SYSTEM
 
-    # 3. Media Control
+    # 7. Media Control
     if any(k in msg_lower for k in MEDIA_KEYWORDS) or re.search(r'\b(play music|pause music|next song|spotify)\b', msg_lower):
         return INTENT_MEDIA
 
-    # 4. Browser / Search
+    # 8. Browser / Search
     if any(k in msg_lower for k in BROWSER_KEYWORDS) or re.search(r'\b(search google|google search|search youtube|search online|open website)\b', msg_lower):
         return INTENT_BROWSER
 
-    # 5. Obsidian / Notes
+    # 9. Obsidian / Notes
     if any(k in msg_lower for k in OBSIDIAN_KEYWORDS) or re.search(r'\b(obsidian|second brain|save note|take note)\b', msg_lower):
         return INTENT_OBSIDIAN
 
-    # 6. Coding
+    # 10. Coding
     if is_coding_task(user_message):
         return INTENT_CODING
 

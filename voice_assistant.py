@@ -329,10 +329,13 @@ def find_best_mic_index() -> tuple[Optional[int], str]:
 
 
 def run_voice_loop():
-    from single_instance import acquire_single_instance, prevent_system_sleep
-    if not acquire_single_instance():
-        console.print("[bold yellow]⚠ Prime AI is already active in another window or background process.[/bold yellow]")
-        console.print("[dim]Exiting duplicate instance to avoid audio echo and mic capture conflicts.[/dim]\n")
+    from single_instance import acquire_single_instance, prevent_system_sleep, get_running_instance_pid
+    force = any(arg in sys.argv for arg in ("--force", "-f", "/force"))
+    if not acquire_single_instance(force=force):
+        active_pid = get_running_instance_pid()
+        pid_msg = f" (PID {active_pid})" if active_pid else ""
+        console.print(f"[bold yellow]⚠ Prime AI is already active in another window or background process{pid_msg}.[/bold yellow]")
+        console.print("[dim]Run with [bold cyan]--force[/bold cyan] to terminate the existing instance, or close that window.[/dim]\n")
         return
 
     prevent_system_sleep(True)

@@ -107,6 +107,27 @@ class AIAgent:
         except Exception:
             pass
 
+        # Friday Explicit User Memory & Preferences Ledger
+        try:
+            from actions.friday_memory import memory_ledger
+            f_mem = memory_ledger.get_system_prompt_context()
+            if f_mem:
+                prompt += f"\n\n{f_mem}"
+        except Exception:
+            pass
+
+        # Friday Active Durable Task Plan
+        try:
+            from actions.friday_tasks import task_manager
+            plan_res = task_manager.get_active_plan()
+            if plan_res.get("has_active_plan") and plan_res.get("plan"):
+                p = plan_res["plan"]
+                curr_idx = p.get("current_step_index", 0)
+                step_desc = p["steps"][curr_idx]["description"] if curr_idx < len(p["steps"]) else "Finalizing"
+                prompt += f"\n\n[FRIDAY ACTIVE MULTI-STEP TASK PLAN]\nPlan ID: {p.get('plan_id')}\nGoal: {p.get('goal')}\nCurrent Step [{curr_idx + 1}/{len(p.get('steps', []))}]: {step_desc}\nStatus: {p.get('status')}"
+        except Exception:
+            pass
+
         # Deep Predictive Codebase & Workflow Context
         try:
             from predictive_context_engine import predictive_engine

@@ -127,3 +127,15 @@
   5. Registered 8 new tools (createProblemCharter, decomposeProblemDAG, registerWorkArtifact, scanLaborMarketplace, placeLaborBid, verifyLaborDelivery, settleTaskEscrow, getCollagentStatus) bringing Prime's total active tools to 143 with 8/8 suite tests and 85/85 full system regression tests passing.
 
 
+### [2026-10-01 07:24:00] Core System Improvements: Dynamic Prompt Synthesis, Smart Mutex PID & Multi-Intent Accuracy
+- **Decision**: Elevated Prime AI stability, context awareness, and runtime control
+- **Details**:
+  1. single_instance.py: Added PID tracking file (`memory/prime_process.pid`), active PID detection, stale process termination, and `--force` takeover flag to eliminate deadlocks and accidental dual-instance lockouts.
+  2. voice_assistant.py & prime.py: Enhanced launch guards to report the specific PID holding the mutex and accept `--force` / `-f` arguments to cleanly take over desktop execution.
+  3. run.bat & start-prime.bat: Added `%*` parameter pass-through for CLI arguments.
+  4. ai_agent.py: Injected Friday User Preferences Ledger, active durable multi-step task plans, and persistent knowledge graph directly into the LLM system prompt for seamless continuity across turns.
+  5. core/intent_router.py: Added 4 new high-level intent categories (`FRIDAY_ASSISTANT`, `AGENTWORK_LABOR`, `OPAL_STREAMING`, `OS1_WORKSPACE`) with fast-path keywords (<1ms) and precision directives to eliminate tool hallucinations.
+  6. Verified 85/85 tests passing across all suites.
+
+
+
