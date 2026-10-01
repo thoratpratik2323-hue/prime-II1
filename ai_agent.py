@@ -153,7 +153,7 @@ class AIAgent:
                 from google import genai
                 from google.genai import types
 
-                self._gemini_client = genai.Client(api_key=config.gemini_api_key, http_options={"timeout": 12000})
+                self._gemini_client = genai.Client(api_key=config.gemini_api_key, http_options={"timeout": 4500})
                 preferred = config.get_default_model("gemini")
                 candidates = [preferred, "gemini-3.1-flash-lite", "gemini-flash-lite-latest"]
                 seen = set()
@@ -180,7 +180,7 @@ class AIAgent:
                 self._gemini_chat = None
 
         # Universal OpenAI-compatible client (Groq, Cerebras, GitHub, OpenRouter, Mistral, DeepSeek, Ollama, etc.)
-        if provider in ("groq", "openai", "cerebras", "github", "openrouter", "mistral", "deepseek", "ollama", "custom") or config.groq_api_key or config.openai_api_key:
+        if provider in ("groq", "openai", "cerebras", "github", "openrouter", "mistral", "deepseek", "ollama", "custom"):
             try:
                 from openai import OpenAI
                 import providers
@@ -196,6 +196,25 @@ class AIAgent:
             except Exception as e:
                 log.error("Failed to init OpenAI-compatible client: %s", e)
                 self._openai_client = None
+        else:
+            # Standby ultra-fast Groq/OpenRouter client when Gemini is primary
+            self._openai_client = None
+            if config.groq_api_key:
+                try:
+                    from openai import OpenAI
+                    self._openai_client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=config.groq_api_key, timeout=5.0)
+                    self._active_fallback_model = "openai/gpt-oss-120b"
+                    log.info("Initialized standby ultra-fast Groq fallback client (model: %s)", self._active_fallback_model)
+                except Exception as e:
+                    log.warning("Standby Groq fallback init failed: %s", e)
+            elif config.openrouter_api_key:
+                try:
+                    from openai import OpenAI
+                    self._openai_client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=config.openrouter_api_key, timeout=5.0)
+                    self._active_fallback_model = "nvidia/nemotron-3.5-lightning:free"
+                    log.info("Initialized standby OpenRouter fallback client (model: %s)", self._active_fallback_model)
+                except Exception as e:
+                    log.warning("Standby OpenRouter fallback init failed: %s", e)
 
     def reset_chat(self):
         """Reset conversational context."""
@@ -439,12 +458,14 @@ class AIAgent:
         except Exception as e:
             err_str = str(e)
             log.warning("Gemini chat error: %s. Initiating fast failover...", e)
-            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+            is_transient_or_quota = any(k in err_str for k in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "timed out", "timeout", "DeadlineExceeded"))
+            if is_transient_or_quota:
                 # Back off Gemini for 60 seconds to route directly to Groq without stalling user turns
                 self._gemini_quota_exhausted_until = time.time() + 60.0
+                log.info("Gemini backoff activated for 60s due to transient/quota error: %s", err_str[:120])
 
-            # Try single fast failover to gemini-3.1-flash-lite if we weren't already using it and not rate-limited
-            if "429" not in err_str and getattr(self, "_current_gemini_model", "") != "gemini-3.1-flash-lite":
+            # Try single fast failover to gemini-3.1-flash-lite ONLY if not a service-wide 503/timeout/429
+            if not is_transient_or_quota and getattr(self, "_current_gemini_model", "") != "gemini-3.1-flash-lite":
                 try:
                     log.info("Failing over directly to Gemini 3.1 Flash Lite...")
                     self._gemini_chat = self._gemini_client.chats.create(
@@ -471,7 +492,12 @@ class AIAgent:
         on_tool_result: Optional[Callable[[str, Any], None]],
     ) -> str:
         provider = config.get_active_provider()
-        model = getattr(self, "_active_fallback_model", None) or config.get_default_model(provider)
+        model = getattr(self, "_active_fallback_model", None)
+        if not model:
+            if provider in ("gemini", "google"):
+                model = "openai/gpt-oss-120b" if config.groq_api_key else "gpt-4o"
+            else:
+                model = config.get_default_model(provider)
         tools = get_openai_tools()
 
         user_message = {"role": "user", "content": user_input}
@@ -676,9 +702,15 @@ class AIAgent:
                     voice.speak(msg)
                 return msg
 
-        # 3. Open website in Google Chrome or Open Application
+        # 3. Fast Navigation / Open website in Google Chrome or Open Application
+        if lower.strip() in ("navigate", "navigate to", "go to", "browse", "browse to"):
+            msg = "Where would you like to navigate, Sir? E.g., YouTube, Google, or GitHub."
+            if voice.tts_enabled:
+                voice.speak(msg)
+            return msg
+
         m_app = (
-            re.match(r"^(?:open|launch|start|kholo|chalao)\s+(?:the\s+)?(?:app\s+)?([a-zA-Z0-9\s\.\-_]+)$", lower)
+            re.match(r"^(?:open|launch|start|kholo|chalao|navigate\s+to|go\s+to|browse\s+to)\s+(?:the\s+)?(?:app\s+)?([a-zA-Z0-9\s\.\-_]+)$", lower)
             or re.match(r"^(?:app\s+open\s+(?:karo\s+)?)([a-zA-Z0-9\s\.\-_]+)$", lower)
             or re.match(r"^([a-zA-Z0-9\s\.\-_]+)\s+(?:open|launch|start|kholo|chalao)(?:\s+karo)?$", lower)
         )
