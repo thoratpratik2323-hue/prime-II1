@@ -820,6 +820,12 @@ def main():
     except Exception:
         pass
 
+    try:
+        from core.prime_dots import ensure_office_server
+        ensure_office_server(8765)
+    except Exception:
+        pass
+
     from voice_assistant import get_dynamic_welcome_message
     welcome_msg = get_dynamic_welcome_message()
     console.print(f"  [bold cyan]Prime:[/bold cyan] [bold bright_white]\"{welcome_msg}\"[/bold bright_white]\n")
