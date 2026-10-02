@@ -2848,6 +2848,8 @@ def _handle_toggle_stapler_dictation(args: Dict[str, Any]) -> Dict[str, Any]:
 
 def _handle_open_office_floor(args: Dict[str, Any]) -> Dict[str, Any]:
     try:
+        from core.prime_dots import ensure_office_server
+        ensure_office_server(8765)
         from desktop_agent.tools_websites import open_url_in_chrome
         open_url_in_chrome("http://localhost:8765/office")
         return {"ok": True, "message": "2D Virtual Office Floor opened at http://localhost:8765/office in Google Chrome."}

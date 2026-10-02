@@ -722,6 +722,8 @@ class AIAgent:
 
         # 0C. Open 2D Virtual Office Floor HUD
         if any(k in lower for k in ("open office floor", "show office floor", "open office", "2d office", "office floor")):
+            from core.prime_dots import ensure_office_server
+            ensure_office_server(8765)
             from desktop_agent.tools_websites import open_url_in_chrome
             open_url_in_chrome("http://localhost:8765/office")
             msg = "Opening Prime AI 2D Virtual Office Floor in Google Chrome, Sir."

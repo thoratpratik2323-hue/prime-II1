@@ -643,3 +643,36 @@ class PrimeDotEngine:
 
 
 dot_engine = PrimeDotEngine()
+
+
+def ensure_office_server(port: int = 8765):
+    """Ensure the 2D Virtual Office Floor HUD HTTP server is running on the given port."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.settimeout(0.5)
+        s.connect(("127.0.0.1", port))
+        s.close()
+        return True  # Server is already active
+    except Exception:
+        pass
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+    try:
+        import threading
+        from mobile_room_server import app
+        t = threading.Thread(
+            target=lambda: app.run(host="0.0.0.0", port=port, debug=False, threaded=True, use_reloader=False),
+            name="prime-office-server",
+            daemon=True
+        )
+        t.start()
+        time.sleep(0.6)
+        return True
+    except Exception as e:
+        logger.warning("Could not auto-start office server: %s", e)
+        return False
