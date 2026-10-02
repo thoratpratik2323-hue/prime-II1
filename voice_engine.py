@@ -182,7 +182,7 @@ class VoiceEngine:
 
         # Initialize pygame mixer for audio playback
         try:
-            pygame.mixer.init(frequency=24000, size=-16, channels=2, buffer=2048)
+            pygame.mixer.init(frequency=24000, size=-16, channels=2, buffer=1024)
         except Exception as e:
             log.warning("Could not init pygame.mixer: %s", e)
 
@@ -417,7 +417,7 @@ class VoiceEngine:
                     wf.writeframes(raw_pcm)
 
                 if not pygame.mixer.get_init():
-                    pygame.mixer.init(frequency=24000, size=-16, channels=2, buffer=2048)
+                    pygame.mixer.init(frequency=24000, size=-16, channels=2, buffer=1024)
                 clock = pygame.time.Clock()
                 try:
                     pygame.mixer.music.load(temp_wav)
@@ -449,7 +449,9 @@ class VoiceEngine:
             return raw if raw.startswith(("+", "-")) else f"+{raw}"
         try:
             val = int(raw)
-            if -50 <= val <= 100 and val != 0:
+            if -50 <= val <= 100:
+                if val == 0:
+                    return "+0%"  # Normal speed (no acceleration)
                 return f"+{val}%" if val > 0 else f"{val}%"
         except (ValueError, TypeError):
             pass
@@ -467,7 +469,7 @@ class VoiceEngine:
         try:
             buf.seek(0)
             if not pygame.mixer.get_init():
-                pygame.mixer.init(frequency=24000, size=-16, channels=2, buffer=2048)
+                pygame.mixer.init(frequency=24000, size=-16, channels=2, buffer=1024)
 
             clock = pygame.time.Clock()
             played_filtered = False
@@ -783,9 +785,9 @@ class VoiceEngine:
         text = re.sub(r'`([^`]+)`', r'\1', text)  # inline code
         text = re.sub(r'https?://\S+', '', text)  # URLs
         text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)  # markdown links
-        text = re.sub(r'[*_~]+([^*_~]+)[*_~]+', r'\1', text)  # bold/italic/strike
+        text = re.sub(r'(?:^|(?<=\s))[*_~]{1,3}([^*_~]+?)[*_~]{1,3}(?=\s|$|[.,!?;:])', r'\1', text)  # bold/italic/strike (preserve underscores in identifiers)
         text = re.sub(r'<[^>]+>', '', text)  # strip XML/HTML tags
-        text = re.sub(r'^[#*>\-\s]+', '', text, flags=re.MULTILINE)  # headers/bullets
+        text = re.sub(r'^[#*>\s]+', '', text, flags=re.MULTILINE)  # headers/bullets (preserve leading hyphens for negative numbers)
         text = re.sub(r'\|[^\n]+\|', ' ', text)  # tables
         text = re.sub(r'[\U00010000-\U0010ffff\u2600-\u27bf\ufe00-\ufe0f]', '', text)  # emojis+symbols
         return re.sub(r'\s+', ' ', text).strip()
@@ -817,7 +819,7 @@ class VoiceEngine:
 
                 # Fallback to Google Web Speech
                 if not text:
-                    text = self.recognizer.recognize_google(audio)
+                    text = self.recognizer.recognize_google(audio, language="en-IN")
 
                 return text.strip() if text else None
         except sr.WaitTimeoutError:
@@ -853,7 +855,7 @@ class VoiceEngine:
                     pass
 
                 if not text:
-                    text = self.recognizer.recognize_google(audio)
+                    text = self.recognizer.recognize_google(audio, language="en-IN")
 
                 return text.strip() if text else None
         except Exception:

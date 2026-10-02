@@ -11,6 +11,7 @@ import logging
 import re
 import time
 import threading
+import queue
 from typing import Any, Callable, Dict, List, Optional
 
 from config import config
@@ -305,10 +306,20 @@ class AIAgent:
         from prime_traces import trace_logger
         active_trace = trace_logger.start_trace(user_input)
 
+        # Track last tool call args for audit trace completeness
+        _last_tool_args: Dict[str, Any] = {}
+
         def logged_tool_result(name: str, res: Any):
-            trace_logger.record_tool_call(active_trace, name, {}, res if isinstance(res, dict) else {"result": str(res)})
+            args = _last_tool_args.pop(name, {})
+            trace_logger.record_tool_call(active_trace, name, args, res if isinstance(res, dict) else {"result": str(res)})
             if on_tool_result:
                 on_tool_result(name, res)
+
+        _orig_on_tool_call = on_tool_call
+        def _tracking_on_tool_call(name: str, args: Dict[str, Any]):
+            _last_tool_args[name] = args
+            if _orig_on_tool_call:
+                _orig_on_tool_call(name, args)
 
         lower_in = user_input.lower()
         # Persona Switching Detection
@@ -338,7 +349,7 @@ class AIAgent:
             return msg
 
         # 0. Fast-Path Direct System Command Execution (Zero latency for hardware/app actions)
-        fast_res = self._process_fast_command(user_input, on_tool_call, logged_tool_result)
+        fast_res = self._process_fast_command(user_input, _tracking_on_tool_call, logged_tool_result)
         if fast_res is not None:
             trace_logger.end_trace(active_trace, response=fast_res)
             self._record_memory_turn(user_input, fast_res)
@@ -348,7 +359,7 @@ class AIAgent:
 
 
         # 1. If provider is Gemini
-        now = time.time()
+        now = time.monotonic()
         gemini_cooldown = getattr(self, "_gemini_quota_exhausted_until", 0)
         if provider in ("gemini", "google") and self._gemini_chat is not None and now > gemini_cooldown:
             res = self._process_gemini(user_input, on_tool_call, logged_tool_result)
@@ -393,23 +404,50 @@ class AIAgent:
                 return res
 
         # 3. Fallback: Local rule-based command execution (100% offline!)
-        res = self._process_local_fallback(user_input, on_tool_call, logged_tool_result)
+        res = self._process_local_fallback(user_input, _tracking_on_tool_call, logged_tool_result)
         if not res:
             res = "Offline mode active, Sir. Network unreachable. Local command engine ready."
         trace_logger.end_trace(active_trace, response=res)
         self._record_memory_turn(user_input, res)
         return res
 
+    # Single memory extraction worker (bounded queue, no thread-per-turn spam)
+    _memory_queue: queue.Queue = queue.Queue(maxsize=50)
+    _memory_worker_started = False
+
+    @classmethod
+    def _start_memory_worker(cls):
+        """Start the single background memory extraction worker."""
+        if cls._memory_worker_started:
+            return
+        cls._memory_worker_started = True
+
+        def _worker():
+            while True:
+                try:
+                    user_text, assistant_text = cls._memory_queue.get(timeout=2.0)
+                except queue.Empty:
+                    continue
+                try:
+                    from memory.brain import auto_extract_from_turn
+                    auto_extract_from_turn(user_text, assistant_text)
+                except Exception:
+                    pass
+                finally:
+                    cls._memory_queue.task_done()
+
+        t = threading.Thread(target=_worker, daemon=True, name="prime-memory-worker")
+        t.start()
+
     def _record_memory_turn(self, user_text: str, assistant_text: str):
-        """Asynchronously extract learned facts and entities into cognitive brain."""
+        """Queue a turn for asynchronous memory extraction (bounded, single worker)."""
         if not user_text or not assistant_text or assistant_text == "__GEMINI_EXHAUSTED__":
             return
+        self._start_memory_worker()
         try:
-            import threading
-            from memory.brain import auto_extract_from_turn
-            threading.Thread(target=auto_extract_from_turn, args=(user_text, assistant_text), daemon=True).start()
-        except Exception:
-            pass
+            self._memory_queue.put_nowait((user_text, assistant_text))
+        except queue.Full:
+            pass  # Drop oldest-unprocessed turns gracefully under load
 
     def _process_gemini(
         self,
@@ -492,7 +530,7 @@ class AIAgent:
             is_transient_or_quota = any(k in err_str for k in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "timed out", "timeout", "DeadlineExceeded"))
             if is_transient_or_quota:
                 # Back off Gemini for 60 seconds to route directly to Groq without stalling user turns
-                self._gemini_quota_exhausted_until = time.time() + 60.0
+                self._gemini_quota_exhausted_until = time.monotonic() + 60.0
                 log.info("Gemini backoff activated for 60s due to transient/quota error: %s", err_str[:120])
 
             # Try single fast failover to gemini-3.1-flash-lite ONLY if not a service-wide 503/timeout/429
@@ -720,7 +758,7 @@ class AIAgent:
             if target and target not in ("this", "active", "current", "ye", "is"):
                 if on_tool_call:
                     on_tool_call("closeApplication", {"name": target})
-                res = execute_tool("closeApplication", {"name": target})
+                res = self._intercept_and_execute_tool("closeApplication", {"name": target})
                 if on_tool_result:
                     on_tool_result("closeApplication", res)
                 msg = _extract_res_str(res, f"Closed {target}.")
@@ -759,7 +797,7 @@ class AIAgent:
             if target.lower() in SITE_URLS or any(k in target.lower() for k in web_keywords) or any(target.lower().endswith(ext) for ext in (".com", ".org", ".net", ".io", ".ai", ".in", ".co", ".app")):
                 if on_tool_call:
                     on_tool_call("openWebsite", {"url": target, "name": target})
-                res = execute_tool("openWebsite", {"url": target, "name": target})
+                res = self._intercept_and_execute_tool("openWebsite", {"url": target, "name": target})
                 if on_tool_result:
                     on_tool_result("openWebsite", res)
                 msg = f"Opening {target.title()} in Google Chrome."
@@ -769,7 +807,7 @@ class AIAgent:
             else:
                 if on_tool_call:
                     on_tool_call("openApplication", {"name": target})
-                res = execute_tool("openApplication", {"name": target})
+                res = self._intercept_and_execute_tool("openApplication", {"name": target})
                 if on_tool_result:
                     on_tool_result("openApplication", res)
                 if res.get("ok") is False:
@@ -782,19 +820,19 @@ class AIAgent:
 
         # 4. Volume / Mute
         if lower in ("volume up", "increase volume", "awaz badao", "sound badhao"):
-            execute_tool("volumeUp", {"amount": 10})
+            self._intercept_and_execute_tool("volumeUp", {"amount": 10})
             msg = "Volume increased."
             if voice.tts_enabled:
                 voice.speak(msg)
             return msg
         if lower in ("volume down", "decrease volume", "awaz kam karo", "sound kam karo"):
-            execute_tool("volumeDown", {"amount": 10})
+            self._intercept_and_execute_tool("volumeDown", {"amount": 10})
             msg = "Volume decreased."
             if voice.tts_enabled:
                 voice.speak(msg)
             return msg
         if lower in ("mute", "unmute", "mute toggle", "awaz band karo"):
-            execute_tool("muteToggle", {})
+            self._intercept_and_execute_tool("muteToggle", {})
             msg = "Mute toggled."
             if voice.tts_enabled:
                 voice.speak(msg)
@@ -827,7 +865,7 @@ class AIAgent:
         if re.search(r'\b(system info|cpu|ram|specs|diagnostics|status)\b', lower):
             if on_tool_call:
                 on_tool_call("systemInfo", {})
-            res = execute_tool("systemInfo", {})
+            res = self._intercept_and_execute_tool("systemInfo", {})
             if on_tool_result:
                 on_tool_result("systemInfo", res)
             out = _extract_res_str(res, "System info fetched.")
@@ -837,19 +875,19 @@ class AIAgent:
 
         # 2. Volume controls
         if "volume up" in lower or "increase volume" in lower:
-            execute_tool("volumeUp", {"amount": 10})
+            self._intercept_and_execute_tool("volumeUp", {"amount": 10})
             msg = "Volume increased."
             if voice.tts_enabled:
                 voice.speak(msg)
             return msg
         if "volume down" in lower or "decrease volume" in lower:
-            execute_tool("volumeDown", {"amount": 10})
+            self._intercept_and_execute_tool("volumeDown", {"amount": 10})
             msg = "Volume decreased."
             if voice.tts_enabled:
                 voice.speak(msg)
             return msg
         if re.search(r'\bmute\b', lower):
-            execute_tool("muteToggle", {})
+            self._intercept_and_execute_tool("muteToggle", {})
             msg = "Mute toggled."
             if voice.tts_enabled:
                 voice.speak(msg)
@@ -868,7 +906,7 @@ class AIAgent:
             rec_clean = re.sub(r'\b(to|ko|la|se|the|my|friend)\b', '', rec, flags=re.IGNORECASE).strip() or rec
             if on_tool_call:
                 on_tool_call("sendWhatsAppMessage", {"recipient": rec_clean, "message": msg_body})
-            res = execute_tool("sendWhatsAppMessage", {"recipient": rec_clean, "message": msg_body})
+            res = self._intercept_and_execute_tool("sendWhatsAppMessage", {"recipient": rec_clean, "message": msg_body})
             if on_tool_result:
                 on_tool_result("sendWhatsAppMessage", res)
             out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, "WhatsApp message dispatched.")
@@ -882,14 +920,14 @@ class AIAgent:
                 rec = m_chat.group(1).strip()
                 if on_tool_call:
                     on_tool_call("openWhatsAppChat", {"recipient": rec})
-                res = execute_tool("openWhatsAppChat", {"recipient": rec})
+                res = self._intercept_and_execute_tool("openWhatsAppChat", {"recipient": rec})
                 if on_tool_result:
                     on_tool_result("openWhatsAppChat", res)
                 out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, f"Opened WhatsApp chat with {rec}.")
             else:
                 if on_tool_call:
                     on_tool_call("openApplication", {"name": "whatsapp"})
-                res = execute_tool("openApplication", {"name": "whatsapp"})
+                res = self._intercept_and_execute_tool("openApplication", {"name": "whatsapp"})
                 if on_tool_result:
                     on_tool_result("openApplication", res)
                 out = "Opening WhatsApp on your desktop, Sir."
@@ -907,7 +945,7 @@ class AIAgent:
             ctype = "video" if "vid" in lower else "voice"
             if on_tool_call:
                 on_tool_call("makeWhatsAppCall", {"recipient": rec, "call_type": ctype})
-            res = execute_tool("makeWhatsAppCall", {"recipient": rec, "call_type": ctype})
+            res = self._intercept_and_execute_tool("makeWhatsAppCall", {"recipient": rec, "call_type": ctype})
             if on_tool_result:
                 on_tool_result("makeWhatsAppCall", res)
             out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, f"Initiating WhatsApp call to {rec}.")
@@ -917,7 +955,7 @@ class AIAgent:
 
         # 2c. WhatsApp Focus Mode & Unread Fast-Path
         if any(k in lower for k in ("unread whatsapp", "whatsapp unread", "check whatsapp", "any new messages", "check unread")):
-            res = execute_tool("checkWhatsAppUnread", {})
+            res = self._intercept_and_execute_tool("checkWhatsAppUnread", {})
             if isinstance(res, dict) and res.get("has_unread"):
                 out = f"Sir, you have {res.get('unread_count')} unread WhatsApp messages."
             else:
@@ -928,7 +966,7 @@ class AIAgent:
 
         if "focus mode" in lower:
             enable = not any(k in lower for k in ("off", "disable", "band", "deactivate"))
-            res = execute_tool("setWhatsAppFocusMode", {"enabled": enable})
+            res = self._intercept_and_execute_tool("setWhatsAppFocusMode", {"enabled": enable})
             out = f"WhatsApp focus mode is now {'enabled' if enable else 'disabled'}, Sir."
             if voice.tts_enabled:
                 voice.speak(out)
@@ -943,7 +981,7 @@ class AIAgent:
             q = m_notes.group(1).strip()
             if on_tool_call:
                 on_tool_call("queryObsidianKnowledgeBase", {"query": q})
-            res = execute_tool("queryObsidianKnowledgeBase", {"query": q, "top_k": 3})
+            res = self._intercept_and_execute_tool("queryObsidianKnowledgeBase", {"query": q, "top_k": 3})
             if on_tool_result:
                 on_tool_result("queryObsidianKnowledgeBase", res)
             count = res.get("count", 0) if isinstance(res, dict) else 0
@@ -960,7 +998,7 @@ class AIAgent:
         if lower in ("run tests", "run test suite", "test run karo", "run unit tests", "execute tests"):
             if on_tool_call:
                 on_tool_call("runUnitTests", {})
-            res = execute_tool("runUnitTests", {})
+            res = self._intercept_and_execute_tool("runUnitTests", {})
             if on_tool_result:
                 on_tool_result("runUnitTests", res)
             passed = res.get("ok", False)
@@ -970,7 +1008,7 @@ class AIAgent:
             return out
 
         if lower in ("git status", "check git", "git status check karo"):
-            res = execute_tool("gitAutomate", {"action": "status"})
+            res = self._intercept_and_execute_tool("gitAutomate", {"action": "status"})
             out = f"Git status: {res.get('status', 'Clean')}"
             if voice.tts_enabled:
                 voice.speak(out)
@@ -981,7 +1019,7 @@ class AIAgent:
             cmd_to_heal = m_cmd.group(1).strip() if m_cmd else "pytest"
             if on_tool_call:
                 on_tool_call("runAutonomousCodeRepair", {"command": cmd_to_heal})
-            res = execute_tool("runAutonomousCodeRepair", {"command": cmd_to_heal, "max_attempts": 3})
+            res = self._intercept_and_execute_tool("runAutonomousCodeRepair", {"command": cmd_to_heal, "max_attempts": 3})
             if on_tool_result:
                 on_tool_result("runAutonomousCodeRepair", res)
             out = res.get("message", "Self-healing cycle complete.")
@@ -999,7 +1037,7 @@ class AIAgent:
             if target_elem not in ("start", "enter", "space", "esc", "tab", "mute", "volume", "music"):
                 if on_tool_call:
                     on_tool_call("locateAndClickUI", {"element": target_elem})
-                res = execute_tool("locateAndClickUI", {"element": target_elem})
+                res = self._intercept_and_execute_tool("locateAndClickUI", {"element": target_elem})
                 if on_tool_result:
                     on_tool_result("locateAndClickUI", res)
                 out = res.get("message") if isinstance(res, dict) and res.get("ok") else (res.get("error") if isinstance(res, dict) else str(res))
@@ -1009,21 +1047,21 @@ class AIAgent:
 
         # 2g. Wireless Android Fast-Path (Ultron A Voice with Hands)
         if any(k in lower for k in ("phone battery", "mobile battery", "battery on phone", "phone ki battery")):
-            res = execute_tool("androidBattery", {})
+            res = self._intercept_and_execute_tool("androidBattery", {})
             out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, "Fetched phone battery.")
             if voice.tts_enabled:
                 voice.speak(out)
             return out
 
         if any(k in lower for k in ("unlock phone", "phone unlock", "phone ko unlock karo", "wake phone")):
-            res = execute_tool("androidUnlock", {})
+            res = self._intercept_and_execute_tool("androidUnlock", {})
             out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, "Phone unlocked.")
             if voice.tts_enabled:
                 voice.speak(out)
             return out
 
         if any(k in lower for k in ("lock phone", "phone lock", "phone screen off", "phone ko lock karo")):
-            res = execute_tool("androidLock", {})
+            res = self._intercept_and_execute_tool("androidLock", {})
             out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, "Phone locked.")
             if voice.tts_enabled:
                 voice.speak(out)
@@ -1036,14 +1074,14 @@ class AIAgent:
         )
         if m_phone_app:
             app_target = m_phone_app.group(1).strip()
-            res = execute_tool("androidOpenApp", {"app_name": app_target})
+            res = self._intercept_and_execute_tool("androidOpenApp", {"app_name": app_target})
             out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, f"Opening {app_target} on phone.")
             if voice.tts_enabled:
                 voice.speak(out)
             return out
 
         if any(k in lower for k in ("phone notification", "phone notifications", "check phone notifications", "mobile notifications")):
-            res = execute_tool("androidNotifications", {})
+            res = self._intercept_and_execute_tool("androidNotifications", {})
             out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, "Checked phone notifications.")
             if voice.tts_enabled:
                 voice.speak(out)
@@ -1052,14 +1090,14 @@ class AIAgent:
         m_phone_media = re.search(r'phone\s+(?:media\s+)?(play|pause|next|previous|stop|volume_up|volume_down)', lower)
         if m_phone_media:
             action = m_phone_media.group(1).strip()
-            res = execute_tool("androidMediaControl", {"action": action})
+            res = self._intercept_and_execute_tool("androidMediaControl", {"action": action})
             out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, f"Phone media: {action}.")
             if voice.tts_enabled:
                 voice.speak(out)
             return out
 
         if any(k in lower for k in ("connected phones", "phone devices", "list phones", "adb devices")):
-            res = execute_tool("androidListDevices", {})
+            res = self._intercept_and_execute_tool("androidListDevices", {})
             out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, "Listed devices.")
             if voice.tts_enabled:
                 voice.speak(out)
@@ -1068,7 +1106,7 @@ class AIAgent:
         # 2h. Stark Intercom Audio DSP Filter Fast-Path
         if any(k in lower for k in ("stark filter", "intercom filter", "iron man voice", "radio filter", "dsp filter")):
             enable = not any(k in lower for k in ("off", "disable", "band", "deactivate"))
-            res = execute_tool("toggleStarkAudioFilter", {"enabled": enable})
+            res = self._intercept_and_execute_tool("toggleStarkAudioFilter", {"enabled": enable})
             out = res.get("message") if isinstance(res, dict) else _extract_res_str(res, f"Stark audio filter {'enabled' if enable else 'disabled'}.")
             if voice.tts_enabled:
                 voice.speak(out)
@@ -1091,13 +1129,13 @@ class AIAgent:
             from desktop_agent.tools_websites import SITE_URLS
             web_keywords = ("youtube", "google", "github", "reddit", "twitter", "instagram", "facebook", "linkedin", "chatgpt", "netflix", "gmail", "spotify", "hotstar", "amazon", "flipkart")
             if target.lower() in SITE_URLS or any(k in target.lower() for k in web_keywords) or any(target.lower().endswith(ext) for ext in (".com", ".org", ".net", ".io", ".ai", ".in", ".co", ".app")):
-                execute_tool("openWebsite", {"url": target, "name": target})
+                self._intercept_and_execute_tool("openWebsite", {"url": target, "name": target})
                 msg = f"Opening {target} in Google Chrome."
                 if voice.tts_enabled:
                     voice.speak(msg)
                 return msg
             else:
-                res = execute_tool("openApplication", {"name": target})
+                res = self._intercept_and_execute_tool("openApplication", {"name": target})
                 if res.get("ok") is False:
                     msg = res.get("error", f"Failed to open {target}.")
                 else:
@@ -1117,7 +1155,7 @@ class AIAgent:
                 res = close_window({})
                 msg = res.get("result", "Closed active window.")
             except Exception:
-                res = execute_tool("closeApplication", {"name": "active"})
+                res = self._intercept_and_execute_tool("closeApplication", {"name": "active"})
                 msg = _extract_res_str(res, "Closed active application.")
             if voice.tts_enabled:
                 voice.speak(msg)
@@ -1135,7 +1173,7 @@ class AIAgent:
             # Clean any remaining filler words
             target = re.sub(r"\b(app|application|the|please|window)\b", "", target, flags=re.IGNORECASE).strip()
             if target:
-                res = execute_tool("closeApplication", {"name": target})
+                res = self._intercept_and_execute_tool("closeApplication", {"name": target})
                 if res.get("ok") is False:
                     msg = res.get("error", f"Failed to close {target}.")
                 else:
@@ -1156,7 +1194,7 @@ class AIAgent:
         if "search youtube for" in lower or "youtube search" in lower or lower.startswith("search youtube"):
             q = re.sub(r"(search youtube for|youtube search|search youtube|play|on youtube)", "", lower).strip()
             if q:
-                execute_tool("searchYouTube", {"query": q})
+                self._intercept_and_execute_tool("searchYouTube", {"query": q})
                 msg = f"Searching YouTube for {q}."
                 if voice.tts_enabled:
                     voice.speak(msg)
@@ -1164,7 +1202,7 @@ class AIAgent:
 
         # 6. Screenshot
         if "screenshot" in lower:
-            res = execute_tool("saveScreenshot", {})
+            res = self._intercept_and_execute_tool("saveScreenshot", {})
             msg = _extract_res_str(res, "Screenshot captured.")
             if voice.tts_enabled:
                 voice.speak(msg)
@@ -1184,7 +1222,7 @@ class AIAgent:
                 f'if __name__ == "__main__":\n'
                 f'    run()\n'
             )
-            res = execute_tool("createPythonFile", {"filename": filename, "code": code_content})
+            res = self._intercept_and_execute_tool("createPythonFile", {"filename": filename, "code": code_content})
             if res.get("ok") is False:
                 out_msg = res.get("error", "Failed to create python file.")
             else:

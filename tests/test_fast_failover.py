@@ -36,7 +36,7 @@ class TestFastFailoverAndNavigation(unittest.TestCase):
 
         res = self.agent._process_gemini("test prompt", None, None)
         self.assertEqual(res, "__GEMINI_EXHAUSTED__")
-        self.assertGreater(self.agent._gemini_quota_exhausted_until, time.time() + 40.0)
+        self.assertGreater(self.agent._gemini_quota_exhausted_until, time.monotonic() + 40.0)
 
     def test_gemini_timeout_immediate_groq_backoff(self):
         self.agent._gemini_chat = MagicMock()
@@ -44,7 +44,7 @@ class TestFastFailoverAndNavigation(unittest.TestCase):
 
         res = self.agent._process_gemini("test prompt", None, None)
         self.assertEqual(res, "__GEMINI_EXHAUSTED__")
-        self.assertGreater(self.agent._gemini_quota_exhausted_until, time.time() + 40.0)
+        self.assertGreater(self.agent._gemini_quota_exhausted_until, time.monotonic() + 40.0)
 
 if __name__ == "__main__":
     unittest.main()
